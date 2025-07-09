@@ -4,6 +4,7 @@ import hashlib
 import shutil
 import logging
 import configparser
+import subprocess
 from pathlib import Path
 from datetime import datetime
 import requests
@@ -12,28 +13,23 @@ import requests
 LOG_FILE = 'sync_log.txt'
 CONFIG_FILE = 'config.ini'
 HASH_ALGORITHM = hashlib.sha256
-READ_BUFFER_SIZE = 65536  # 64kb
+READ_BUFFER_SIZE = 65536
 
 def setup_logging(gui_log_handler=None):
-    """
-    Настраивает логирование. Может принимать кастомный обработчик для вывода в GUI.
-    """
     handlers = [
         logging.FileHandler(LOG_FILE, encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
     if gui_log_handler:
         handlers.append(gui_log_handler)
-        
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=handlers,
-        force=True # Для возможности перенастройки
+        force=True
     )
 
 def send_telegram_notification(message):
-    """Отправляет сообщение в Telegram, если настроено."""
     config = configparser.ConfigParser()
     if not os.path.exists(CONFIG_FILE):
         logging.warning(f"Файл конфигурации {CONFIG_FILE} не найден. Уведомление не будет отправлено.")
@@ -56,8 +52,41 @@ def send_telegram_notification(message):
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при отправке уведомления в Telegram: {e}")
 
+def ensure_path_is_ready(path_str, net_creds=None):
+    if os.path.exists(path_str):
+        logging.info(f"Путь '{path_str}' доступен.")
+        return True
+    
+    logging.warning(f"Путь '{path_str}' недоступен. Попытка анализа как сетевого пути...")
+    if not path_str.startswith('\\\\'):
+        logging.error(f"Путь '{path_str}' не является UNC путем и недоступен.")
+        return False
+    
+    if not net_creds or not net_creds.get('user') or not net_creds.get('password'):
+        logging.error(f"Учетные данные для пути '{path_str}' не предоставлены. Невозможно подключиться.")
+        return False
+        
+    user = net_creds['user']
+    password = net_creds['password']
+    logging.info(f"Попытка подключения к '{path_str}' с пользователем '{user}'...")
+    
+    try:
+        if sys.platform == "win32":
+            command = ['net', 'use', path_str, password, f'/user:{user}', '/persistent:no']
+            result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='cp866')
+            logging.info(f"Команда 'net use' выполнена успешно для '{path_str}'.")
+            return True
+        else:
+            logging.warning(f"Автоматическое подключение сетевых дисков не реализовано для {sys.platform}.")
+            return False
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Не удалось подключить сетевой диск '{path_str}'. Ошибка: {e.stderr}")
+        return False
+    except FileNotFoundError:
+        logging.error("Команда 'net' не найдена. Убедитесь, что вы работаете на Windows.")
+        return False
+
 def calculate_file_hash(file_path):
-    """Вычисляет хеш-сумму файла."""
     hasher = HASH_ALGORITHM()
     try:
         with open(file_path, 'rb') as f:
@@ -69,12 +98,8 @@ def calculate_file_hash(file_path):
         return None
 
 def get_files_map(directory):
-    """Создает словарь {относительный_путь: хеш} для всех файлов в директории."""
     files_map = {}
     root_path = Path(directory)
-    if not root_path.is_dir():
-        logging.error(f"Директория не найдена: {directory}")
-        return None
     logging.info(f"Сканирование директории: {directory}")
     for file_path in root_path.rglob('*'):
         if file_path.is_file():
@@ -85,25 +110,18 @@ def get_files_map(directory):
     return files_map
 
 def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
-    """Синхронизирует файлы из исходной директории в целевую."""
     source_path = Path(source_dir)
     dest_path = Path(dest_dir)
-
-    if not source_path.is_dir():
-        raise FileNotFoundError(f"Исходная директория не найдена: {source_dir}")
 
     if not dest_path.exists():
         logging.info(f"Целевая директория не существует. Создание: {dest_dir}")
         dest_path.mkdir(parents=True, exist_ok=True)
-    elif not dest_path.is_dir():
-        raise NotADirectoryError(f"Целевой путь не является директорией: {dest_dir}")
-
+    
     source_files = get_files_map(source_path)
     dest_files = get_files_map(dest_path)
     
     stats = {"copied": 0, "updated": 0, "skipped": 0, "deleted": 0, "errors": 0}
 
-    # 1. Копирование и обновление файлов
     for rel_path, source_hash in source_files.items():
         dest_file_path = dest_path / rel_path
         if rel_path not in dest_files:
@@ -128,7 +146,6 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
                     logging.error(f"Ошибка обновления файла {rel_path}: {e}")
                     stats["errors"] += 1
 
-    # 2. Удаление лишних файлов
     if delete_removed:
         for rel_path in dest_files:
             if rel_path not in source_files:
@@ -142,11 +159,18 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
         for dirpath, _, _ in os.walk(dest_path, topdown=False):
             if not os.listdir(dirpath):
                 logging.info(f"Удаление пустой директории: {dirpath}")
-                os.rmdir(dirpath)
+                try:
+                    os.rmdir(dirpath)
+                except OSError as e:
+                    logging.error(f"Ошибка удаления пустой директории {dirpath}: {e}")
     return stats
 
-def run_sync_session(source, destination, no_overwrite, delete_removed):
-    """Главная функция-обертка для запуска сессии синхронизации."""
+def run_sync_session(source, destination, no_overwrite, delete_removed, source_creds=None, dest_creds=None):
+    if not ensure_path_is_ready(source, source_creds):
+        raise ConnectionError(f"Исходный путь недоступен: {source}")
+    if not ensure_path_is_ready(destination, dest_creds):
+        raise ConnectionError(f"Целевой путь недоступен: {destination}")
+
     start_time = datetime.now()
     logging.info("="*50)
     logging.info("Начало сеанса синхронизации")
@@ -179,4 +203,4 @@ def run_sync_session(source, destination, no_overwrite, delete_removed):
         )
         logging.critical(f"КРИТИЧЕСКАЯ ОШИБКА: {e}", exc_info=True)
         send_telegram_notification(error_message)
-        raise e # Поднимаем исключение дальше
+        raise e

@@ -1,0 +1,20 @@
+# Шаблон файла задачи для синхронизации через командную строку.
+# Используйте: python cli.py --job /path/to/this_file.ini
+
+[SyncJob]
+source = \\server1\shared_folder\source
+destination = D:\Backup\project_a
+no_overwrite = false
+delete_removed = true
+
+# Секции для учетных данных сетевых ресурсов.
+# Раскомментируйте и заполните, если путь - сетевой и требует аутентификации.
+# ВНИМАНИЕ: Хранение паролей в открытом виде небезопасно!
+# Убедитесь, что этот файл защищен от несанкционированного доступа.
+;[SourceNetCreds]
+;user = YOUR_USERNAME
+;password = YOUR_PASSWORD
+
+;[DestNetCreds]
+;user = ANOTHER_USERNAME
+;password = ANOTHER_PASSWORD
