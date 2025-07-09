@@ -23,25 +23,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ШАГ 1: Собираем .exe БЕЗ лишних данных
       - name: Build GUI executable
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "FileSynchronizer_GUI" --icon "icon.ico" gui.py
+          pyinstaller --noconfirm --onefile --windowed --name "FileSynchronizer_GUI" --icon "icon.ico" --add-data "assets;assets" gui.py
       
       - name: Build CLI executable
         run: |
           pyinstaller --noconfirm --onefile --name "FileSynchronizer_CLI" --icon "icon.ico" cli.py
 
-      # ШАГ 2: НОВЫЙ ШАГ! Готовим пакет для релиза
       - name: Prepare package for release
         run: |
           mkdir release_package
           copy dist\*.exe release_package\
           copy *.ini.example release_package\
           copy README.md release_package\
+          xcopy assets release_package\assets\ /E /I
         shell: cmd
 
-      # ШАГ 3: Загружаем новую, полностью готовую папку
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
