@@ -33,7 +33,7 @@
 
 Самый простой способ начать работу — скачать готовую сборку для Windows.
 
-1.  Перейдите на вкладку **[Actions](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions)** в этом репозитории.
+1.  Перейдите на вкладку **[Actions](https://github.com/lammeronline/FS/actions)** в этом репозитории.
 2.  В списке слева выберите "Build Windows Executable".
 3.  Нажмите на самый верхний успешный запуск в списке.
 4.  Внизу страницы, в разделе **"Artifacts"**, скачайте архив `FileSynchronizer-Windows`.
