@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4 # (Также обновим для лучшей практики)
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # (Также обновим для лучшей практики)
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -25,15 +25,14 @@ jobs:
 
       - name: Build GUI executable
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "FileSynchronizer_GUI" --icon "icon.ico" --add-data "config.ini.example;." gui.py
+          pyinstaller --noconfirm --onefile --windowed --name "FileSynchronizer_GUI" --icon "icon.ico" --add-data "config.ini.example;." --add-data "job.ini.example;." gui.py
       
       - name: Build CLI executable
         run: |
-          pyinstaller --noconfirm --onefile --name "FileSynchronizer_CLI" --icon "icon.ico" --add-data "config.ini.example;." cli.py
+          pyinstaller --noconfirm --onefile --name "FileSynchronizer_CLI" --icon "icon.ico" --add-data "config.ini.example;." --add-data "job.ini.example;." cli.py
 
-      # Шаг 6: Загрузка артефактов с использованием актуальной версии
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4 # <-- ИЗМЕНЕНИЕ ЗДЕСЬ
+        uses: actions/upload-artifact@v4
         with:
           name: FileSynchronizer-Windows
           path: dist/

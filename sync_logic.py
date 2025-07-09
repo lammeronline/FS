@@ -5,6 +5,7 @@ import shutil
 import logging
 import configparser
 import subprocess
+import fnmatch
 from pathlib import Path
 from datetime import datetime
 import requests
@@ -97,19 +98,23 @@ def calculate_file_hash(file_path):
         logging.error(f"Не удалось прочитать файл {file_path}: {e}")
         return None
 
-def get_files_map(directory):
+def get_files_map(directory, exclude_patterns=None):
     files_map = {}
     root_path = Path(directory)
     logging.info(f"Сканирование директории: {directory}")
     for file_path in root_path.rglob('*'):
         if file_path.is_file():
+            if exclude_patterns:
+                if any(fnmatch.fnmatch(file_path.name, pattern) for pattern in exclude_patterns):
+                    logging.info(f"ИСКЛЮЧЕНИЕ: Файл '{file_path.name}' по шаблону.")
+                    continue
             relative_path = file_path.relative_to(root_path)
             file_hash = calculate_file_hash(file_path)
             if file_hash:
                 files_map[relative_path] = file_hash
     return files_map
 
-def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
+def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None):
     source_path = Path(source_dir)
     dest_path = Path(dest_dir)
 
@@ -117,10 +122,20 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
         logging.info(f"Целевая директория не существует. Создание: {dest_dir}")
         dest_path.mkdir(parents=True, exist_ok=True)
     
-    source_files = get_files_map(source_path)
-    dest_files = get_files_map(dest_path)
+    source_files = get_files_map(source_path, exclude_patterns)
+    dest_files = get_files_map(dest_path, exclude_patterns)
     
-    stats = {"copied": 0, "updated": 0, "skipped": 0, "deleted": 0, "errors": 0}
+    stats = {"copied": 0, "updated": 0, "skipped": 0, "deleted": 0, "errors": 0, "dirs_created": 0}
+
+    if sync_empty_dirs:
+        logging.info("Синхронизация структуры директорий...")
+        for dirpath, _, _ in os.walk(source_dir):
+            relative_dir = Path(dirpath).relative_to(source_path)
+            dest_dir_path = dest_path / relative_dir
+            if not dest_dir_path.exists():
+                logging.info(f"СОЗДАНИЕ ДИРЕКТОРИИ: {relative_dir}")
+                dest_dir_path.mkdir()
+                stats["dirs_created"] += 1
 
     for rel_path, source_hash in source_files.items():
         dest_file_path = dest_path / rel_path
@@ -157,15 +172,16 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
                     logging.error(f"Ошибка удаления файла {rel_path}: {e}")
                     stats["errors"] += 1
         for dirpath, _, _ in os.walk(dest_path, topdown=False):
-            if not os.listdir(dirpath):
-                logging.info(f"Удаление пустой директории: {dirpath}")
-                try:
+            source_equivalent = source_path / Path(dirpath).relative_to(dest_path)
+            if not os.path.exists(source_equivalent) and not os.listdir(dirpath):
+                 logging.info(f"Удаление лишней пустой директории: {dirpath}")
+                 try:
                     os.rmdir(dirpath)
-                except OSError as e:
+                 except OSError as e:
                     logging.error(f"Ошибка удаления пустой директории {dirpath}: {e}")
     return stats
 
-def run_sync_session(source, destination, no_overwrite, delete_removed, source_creds=None, dest_creds=None):
+def run_sync_session(source, destination, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None, source_creds=None, dest_creds=None):
     start_time = datetime.now()
     logging.info("="*50)
     logging.info("Начало сеанса синхронизации")
@@ -173,16 +189,17 @@ def run_sync_session(source, destination, no_overwrite, delete_removed, source_c
     logging.info(f"Назначение: {destination}")
     logging.info(f"Перезапись отключена: {'Да' if no_overwrite else 'Нет'}")
     logging.info(f"Удаление лишних файлов: {'Да' if delete_removed else 'Нет'}")
+    logging.info(f"Синхронизация пустых папок: {'Да' if sync_empty_dirs else 'Нет'}")
+    logging.info(f"Исключения: {exclude_patterns if exclude_patterns else 'Нет'}")
     logging.info("="*50)
 
     try:
-        # Проверка путей теперь внутри блока try
         if not ensure_path_is_ready(source, source_creds):
             raise ConnectionError(f"Исходный путь недоступен: {source}")
         if not ensure_path_is_ready(destination, dest_creds):
             raise ConnectionError(f"Целевой путь недоступен: {destination}")
 
-        stats = sync_folders(source, destination, no_overwrite, delete_removed)
+        stats = sync_folders(source, destination, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns)
         duration = datetime.now() - start_time
         summary = (
             f"✅ *Синхронизация успешно завершена!*\n\n"
@@ -190,13 +207,13 @@ def run_sync_session(source, destination, no_overwrite, delete_removed, source_c
             f"Время выполнения: `{duration}`\n\n*Статистика:*\n"
             f"- Скопировано новых: *{stats['copied']}*\n- Обновлено: *{stats['updated']}*\n"
             f"- Пропущено: *{stats['skipped']}*\n- Удалено: *{stats['deleted']}*\n"
+            f"- Создано директорий: *{stats.get('dirs_created', 0)}*\n"
             f"- Ошибки: *{stats['errors']}*"
         )
         logging.info("\n" + summary.replace('*', '').replace('`', ''))
         send_telegram_notification(summary)
 
     except Exception as e:
-        # Теперь эта секция ловит ВСЕ критические ошибки, включая ошибки путей
         duration = datetime.now() - start_time
         error_message = (
             f"❌ *ОШИБКА СИНХРОНИЗАЦИИ!*\n\n"
