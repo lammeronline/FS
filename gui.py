@@ -64,10 +64,17 @@ class SyncApp:
     def __init__(self, master):
         self.master = master
         master.title("File Synchronizer")
-        master.geometry("700x550")
+        master.geometry("700x600")
+        
         self.create_menu()
-        self.source_var, self.dest_var = tk.StringVar(), tk.StringVar()
-        self.no_overwrite_var, self.delete_removed_var = tk.BooleanVar(), tk.BooleanVar()
+        
+        self.source_var = tk.StringVar()
+        self.dest_var = tk.StringVar()
+        self.no_overwrite_var = tk.BooleanVar()
+        self.delete_removed_var = tk.BooleanVar()
+        self.sync_empty_dirs_var = tk.BooleanVar()
+        self.exclude_patterns_var = tk.StringVar()
+        
         self._load_state()
 
         path_frame = tk.LabelFrame(master, text="Пути", padx=10, pady=10)
@@ -83,7 +90,13 @@ class SyncApp:
         options_frame.pack(fill="x", padx=10, pady=5)
         tk.Checkbutton(options_frame, text="Не перезаписывать измененные файлы", variable=self.no_overwrite_var).pack(anchor="w")
         tk.Checkbutton(options_frame, text="Удалять лишние файлы в назначении (ОСТОРОЖНО!)", variable=self.delete_removed_var).pack(anchor="w")
+        tk.Checkbutton(options_frame, text="Синхронизировать пустые папки", variable=self.sync_empty_dirs_var).pack(anchor="w")
         
+        exclude_frame = tk.LabelFrame(master, text="Исключения", padx=10, pady=10)
+        exclude_frame.pack(fill="x", padx=10, pady=5)
+        tk.Label(exclude_frame, text="Исключить файлы (шаблоны через запятую):").pack(anchor="w")
+        tk.Entry(exclude_frame, textvariable=self.exclude_patterns_var, width=80).pack(fill="x")
+
         self.sync_button = tk.Button(master, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"))
         self.sync_button.pack(pady=10, ipadx=10, ipady=5)
 
@@ -109,16 +122,19 @@ class SyncApp:
         menubar.add_cascade(label="Справка", menu=help_menu)
 
     def open_settings(self): SettingsWindow(self.master)
-    def show_about(self): messagebox.showinfo("О программе", "File Synchronizer v1.1\n\nПрограмма для синхронизации файлов.\nРазработано с помощью Python и Tkinter.")
+    def show_about(self): messagebox.showinfo("О программе", "File Synchronizer v1.2\n\nПрограмма для синхронизации файлов.\nРазработано с помощью Python и Tkinter.")
     def _load_state(self):
         config = configparser.ConfigParser()
         if os.path.exists(APP_STATE_FILE):
             config.read(APP_STATE_FILE, encoding='utf-8')
             self.source_var.set(config.get('Paths', 'last_source', fallback=''))
             self.dest_var.set(config.get('Paths', 'last_destination', fallback=''))
+            self.exclude_patterns_var.set(config.get('Options', 'last_exclusions', fallback='*.tmp, *.log'))
+            self.sync_empty_dirs_var.set(config.getboolean('Options', 'sync_empty_dirs', fallback=False))
     def _save_state(self):
         config = configparser.ConfigParser()
         config['Paths'] = {'last_source': self.source_var.get(), 'last_destination': self.dest_var.get()}
+        config['Options'] = {'last_exclusions': self.exclude_patterns_var.get(), 'sync_empty_dirs': str(self.sync_empty_dirs_var.get())}
         with open(APP_STATE_FILE, 'w', encoding='utf-8') as configfile: config.write(configfile)
     def browse_source(self): self.source_var.set(filedialog.askdirectory() or self.source_var.get())
     def browse_dest(self): self.dest_var.set(filedialog.askdirectory() or self.dest_var.get())
@@ -139,10 +155,12 @@ class SyncApp:
             messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории.")
             return
         self._save_state()
+        exclude_str = self.exclude_patterns_var.get()
+        exclude_list = [p.strip() for p in exclude_str.split(',') if p.strip()]
         self.sync_button.config(state="disabled", text="Синхронизация...")
-        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get()), daemon=True).start()
-    def run_sync_task(self, source, dest, no_overwrite, delete_removed):
-        try: sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed)
+        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list), daemon=True).start()
+    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns):
+        try: sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns)
         except Exception as e: messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
         finally: self.sync_button.config(state="normal", text="Начать синхронизацию")
 
