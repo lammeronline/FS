@@ -1,0 +1,9 @@
+[telegram]
+# Чтобы получить токен, создайте нового бота через @BotFather в Telegram.
+bot_token = YOUR_TELEGRAM_BOT_TOKEN
+
+# Чтобы получить ваш Chat ID, напишите боту @userinfobot.
+chat_id = YOUR_TELEGRAM_CHAT_ID
+
+# Установите в false, если не хотите получать уведомления
+enabled = true
