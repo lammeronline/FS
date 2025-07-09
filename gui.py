@@ -10,6 +10,7 @@ import sync_logic
 
 APP_STATE_FILE = 'app_state.ini'
 
+# --- Класс QueueHandler остается без изменений ---
 class QueueHandler(logging.Handler):
     def __init__(self, log_queue):
         super().__init__()
@@ -17,6 +18,7 @@ class QueueHandler(logging.Handler):
     def emit(self, record):
         self.log_queue.put(self.format(record))
 
+# --- Класс SettingsWindow остается без изменений ---
 class SettingsWindow(Toplevel):
     def __init__(self, master):
         super().__init__(master)
@@ -60,25 +62,46 @@ class SettingsWindow(Toplevel):
         messagebox.showinfo("Сохранено", "Настройки успешно сохранены.", parent=self)
         self.destroy()
 
+# --- Основной класс приложения ---
 class SyncApp:
     def __init__(self, master):
         self.master = master
         master.title("File Synchronizer")
-        master.geometry("700x600")
+        master.geometry("700x750") # Увеличим высоту окна
         
         self.create_menu()
         
+        # Переменные для путей и опций
         self.source_var = tk.StringVar()
         self.dest_var = tk.StringVar()
         self.no_overwrite_var = tk.BooleanVar()
         self.delete_removed_var = tk.BooleanVar()
         self.sync_empty_dirs_var = tk.BooleanVar()
         self.exclude_patterns_var = tk.StringVar()
+
+        # НОВЫЕ переменные для сетевых ресурсов
+        self.source_use_creds_var = tk.BooleanVar()
+        self.source_user_var = tk.StringVar()
+        self.source_pass_var = tk.StringVar()
+        self.dest_use_creds_var = tk.BooleanVar()
+        self.dest_user_var = tk.StringVar()
+        self.dest_pass_var = tk.StringVar()
         
         self._load_state()
 
-        path_frame = tk.LabelFrame(master, text="Пути", padx=10, pady=10)
+        # --- Виджеты ---
+        self.create_widgets()
+
+        # --- Логирование ---
+        self.log_queue = queue.Queue()
+        sync_logic.setup_logging(QueueHandler(self.log_queue))
+        self.master.after(100, self.poll_log_queue)
+
+    def create_widgets(self):
+        # Фрейм с путями
+        path_frame = tk.LabelFrame(self.master, text="Пути", padx=10, pady=10)
         path_frame.pack(fill="x", padx=10, pady=5)
+        # ... (содержимое path_frame без изменений)
         tk.Label(path_frame, text="Источник:").grid(row=0, column=0, sticky="w")
         tk.Entry(path_frame, textvariable=self.source_var, width=60).grid(row=0, column=1, padx=5)
         tk.Button(path_frame, text="Обзор...", command=self.browse_source).grid(row=0, column=2)
@@ -86,29 +109,113 @@ class SyncApp:
         tk.Entry(path_frame, textvariable=self.dest_var, width=60).grid(row=1, column=1, padx=5)
         tk.Button(path_frame, text="Обзор...", command=self.browse_dest).grid(row=1, column=2)
 
-        options_frame = tk.LabelFrame(master, text="Опции", padx=10, pady=10)
+        # Фрейм с опциями
+        options_frame = tk.LabelFrame(self.master, text="Опции", padx=10, pady=10)
         options_frame.pack(fill="x", padx=10, pady=5)
+        # ... (содержимое options_frame без изменений)
         tk.Checkbutton(options_frame, text="Не перезаписывать измененные файлы", variable=self.no_overwrite_var).pack(anchor="w")
         tk.Checkbutton(options_frame, text="Удалять лишние файлы в назначении (ОСТОРОЖНО!)", variable=self.delete_removed_var).pack(anchor="w")
         tk.Checkbutton(options_frame, text="Синхронизировать пустые папки", variable=self.sync_empty_dirs_var).pack(anchor="w")
-        
-        exclude_frame = tk.LabelFrame(master, text="Исключения", padx=10, pady=10)
+
+        # Фрейм с исключениями
+        exclude_frame = tk.LabelFrame(self.master, text="Исключения", padx=10, pady=10)
         exclude_frame.pack(fill="x", padx=10, pady=5)
+        # ... (содержимое exclude_frame без изменений)
         tk.Label(exclude_frame, text="Исключить файлы (шаблоны через запятую):").pack(anchor="w")
         tk.Entry(exclude_frame, textvariable=self.exclude_patterns_var, width=80).pack(fill="x")
 
-        self.sync_button = tk.Button(master, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"))
+        # НОВЫЙ ФРЕЙМ для сетевых ресурсов
+        net_frame = tk.LabelFrame(self.master, text="Сетевые ресурсы (UNC-пути)", padx=10, pady=10)
+        net_frame.pack(fill="x", padx=10, pady=5)
+        
+        # -- Источник --
+        self.source_creds_check = tk.Checkbutton(net_frame, text="Использовать для источника", variable=self.source_use_creds_var, command=self.toggle_source_creds_fields)
+        self.source_creds_check.grid(row=0, column=0, columnspan=2, sticky="w")
+        
+        tk.Label(net_frame, text="  Пользователь:").grid(row=1, column=0, sticky="e")
+        self.source_user_entry = tk.Entry(net_frame, textvariable=self.source_user_var, width=30)
+        self.source_user_entry.grid(row=1, column=1, sticky="w")
+        
+        tk.Label(net_frame, text="  Пароль:").grid(row=2, column=0, sticky="e")
+        self.source_pass_entry = tk.Entry(net_frame, textvariable=self.source_pass_var, show="*", width=30)
+        self.source_pass_entry.grid(row=2, column=1, sticky="w", pady=(0, 5))
+
+        # -- Назначение --
+        self.dest_creds_check = tk.Checkbutton(net_frame, text="Использовать для назначения", variable=self.dest_use_creds_var, command=self.toggle_dest_creds_fields)
+        self.dest_creds_check.grid(row=3, column=0, columnspan=2, sticky="w")
+        
+        tk.Label(net_frame, text="  Пользователь:").grid(row=4, column=0, sticky="e")
+        self.dest_user_entry = tk.Entry(net_frame, textvariable=self.dest_user_var, width=30)
+        self.dest_user_entry.grid(row=4, column=1, sticky="w")
+        
+        tk.Label(net_frame, text="  Пароль:").grid(row=5, column=0, sticky="e")
+        self.dest_pass_entry = tk.Entry(net_frame, textvariable=self.dest_pass_var, show="*", width=30)
+        self.dest_pass_entry.grid(row=5, column=1, sticky="w")
+        
+        self.toggle_source_creds_fields() # Устанавливаем начальное состояние
+        self.toggle_dest_creds_fields()
+
+        # Кнопка запуска
+        self.sync_button = tk.Button(self.master, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"))
         self.sync_button.pack(pady=10, ipadx=10, ipady=5)
 
-        log_frame = tk.LabelFrame(master, text="Лог выполнения", padx=10, pady=10)
+        # Лог
+        log_frame = tk.LabelFrame(self.master, text="Лог выполнения", padx=10, pady=10)
         log_frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.log_area = scrolledtext.ScrolledText(log_frame, state='disabled', wrap=tk.WORD, bg="#2b2b2b", fg="#a9b7c6")
         self.log_area.pack(fill="both", expand=True)
 
-        self.log_queue = queue.Queue()
-        sync_logic.setup_logging(QueueHandler(self.log_queue))
-        self.master.after(100, self.poll_log_queue)
+    # --- НОВЫЕ МЕТОДЫ для переключения полей ---
+    def toggle_source_creds_fields(self):
+        state = 'normal' if self.source_use_creds_var.get() else 'disabled'
+        self.source_user_entry.config(state=state)
+        self.source_pass_entry.config(state=state)
 
+    def toggle_dest_creds_fields(self):
+        state = 'normal' if self.dest_use_creds_var.get() else 'disabled'
+        self.dest_user_entry.config(state=state)
+        self.dest_pass_entry.config(state=state)
+
+    def start_sync_thread(self):
+        source, dest = self.source_var.get(), self.dest_var.get()
+        if not source or not dest:
+            messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории.")
+            return
+        
+        self._save_state()
+        
+        exclude_str = self.exclude_patterns_var.get()
+        exclude_list = [p.strip() for p in exclude_str.split(',') if p.strip()]
+
+        # Собираем словари с учетными данными
+        source_creds = {'user': self.source_user_var.get(), 'password': self.source_pass_var.get()} if self.source_use_creds_var.get() else None
+        dest_creds = {'user': self.dest_user_var.get(), 'password': self.dest_pass_var.get()} if self.dest_use_creds_var.get() else None
+
+        self.sync_button.config(state="disabled", text="Синхронизация...")
+        
+        threading.Thread(
+            target=self.run_sync_task,
+            args=(
+                source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), 
+                self.sync_empty_dirs_var.get(), exclude_list,
+                source_creds, dest_creds
+            ),
+            daemon=True
+        ).start()
+
+    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds):
+        try:
+            sync_logic.run_sync_session(
+                source, dest, no_overwrite, delete_removed, 
+                sync_empty_dirs, exclude_patterns, 
+                source_creds, dest_creds
+            )
+        except Exception as e:
+            messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
+        finally:
+            self.sync_button.config(state="normal", text="Начать синхронизацию")
+
+    # --- Остальные методы (create_menu, _load_state и т.д.) остаются без изменений ---
     def create_menu(self):
         menubar = tk.Menu(self.master)
         self.master.config(menu=menubar)
@@ -122,7 +229,7 @@ class SyncApp:
         menubar.add_cascade(label="Справка", menu=help_menu)
 
     def open_settings(self): SettingsWindow(self.master)
-    def show_about(self): messagebox.showinfo("О программе", "File Synchronizer v1.2\n\nПрограмма для синхронизации файлов.\nРазработано с помощью Python и Tkinter.")
+    def show_about(self): messagebox.showinfo("О программе", "File Synchronizer v1.3\n\nПрограмма для синхронизации файлов.\nРазработано с помощью Python и Tkinter.")
     def _load_state(self):
         config = configparser.ConfigParser()
         if os.path.exists(APP_STATE_FILE):
@@ -149,20 +256,6 @@ class SyncApp:
         self.log_area.insert(tk.END, record + '\n')
         self.log_area.configure(state='disabled')
         self.log_area.yview(tk.END)
-    def start_sync_thread(self):
-        source, dest = self.source_var.get(), self.dest_var.get()
-        if not source or not dest:
-            messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории.")
-            return
-        self._save_state()
-        exclude_str = self.exclude_patterns_var.get()
-        exclude_list = [p.strip() for p in exclude_str.split(',') if p.strip()]
-        self.sync_button.config(state="disabled", text="Синхронизация...")
-        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list), daemon=True).start()
-    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns):
-        try: sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns)
-        except Exception as e: messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
-        finally: self.sync_button.config(state="normal", text="Начать синхронизацию")
 
 if __name__ == "__main__":
     root = tk.Tk()
