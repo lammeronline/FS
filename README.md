@@ -8,7 +8,7 @@
   Мощный и удобный инструмент для однонаправленной синхронизации файлов с графическим интерфейсом и поддержкой командной строки.
   <br/>
   <br/>
-  <img alt="Build Status" src="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/build.yml/badge.svg">
+  <img alt="Build Status" src="https://github.com/lammeronline/FS/actions/workflows/build.yml/badge.svg">
 </p>
 
 ---
