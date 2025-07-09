@@ -166,11 +166,6 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed):
     return stats
 
 def run_sync_session(source, destination, no_overwrite, delete_removed, source_creds=None, dest_creds=None):
-    if not ensure_path_is_ready(source, source_creds):
-        raise ConnectionError(f"Исходный путь недоступен: {source}")
-    if not ensure_path_is_ready(destination, dest_creds):
-        raise ConnectionError(f"Целевой путь недоступен: {destination}")
-
     start_time = datetime.now()
     logging.info("="*50)
     logging.info("Начало сеанса синхронизации")
@@ -181,6 +176,12 @@ def run_sync_session(source, destination, no_overwrite, delete_removed, source_c
     logging.info("="*50)
 
     try:
+        # Проверка путей теперь внутри блока try
+        if not ensure_path_is_ready(source, source_creds):
+            raise ConnectionError(f"Исходный путь недоступен: {source}")
+        if not ensure_path_is_ready(destination, dest_creds):
+            raise ConnectionError(f"Целевой путь недоступен: {destination}")
+
         stats = sync_folders(source, destination, no_overwrite, delete_removed)
         duration = datetime.now() - start_time
         summary = (
@@ -193,7 +194,9 @@ def run_sync_session(source, destination, no_overwrite, delete_removed, source_c
         )
         logging.info("\n" + summary.replace('*', '').replace('`', ''))
         send_telegram_notification(summary)
+
     except Exception as e:
+        # Теперь эта секция ловит ВСЕ критические ошибки, включая ошибки путей
         duration = datetime.now() - start_time
         error_message = (
             f"❌ *ОШИБКА СИНХРОНИЗАЦИИ!*\n\n"
