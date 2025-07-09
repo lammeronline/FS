@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, Toplevel
+from PIL import Image, ImageTk
 import threading
 import logging
 import queue
@@ -67,24 +68,31 @@ class AboutWindow(Toplevel):
         super().__init__(master)
         self.transient(master)
         self.title("О программе")
-        self.geometry("350x250")
+        self.geometry("350x200") 
         self.resizable(False, False)
         self.grab_set()
 
-        try:
-            # Путь должен быть относительным, PyInstaller найдет его в сборке.
-            icon_path = Path(__file__).parent / "assets" / "icon.png"
-            self.icon_image = tk.PhotoImage(file=icon_path)
-            icon_label = tk.Label(self, image=self.icon_image)
-            icon_label.pack(pady=10)
-        except tk.TclError:
-            logging.warning("Не удалось загрузить иконку assets/icon.png. Убедитесь, что файл существует.")
+        main_frame = tk.Frame(self)
+        main_frame.pack(pady=15, padx=20, fill="both", expand=True)
 
-        tk.Label(self, text="File Synchronizer", font=("Helvetica", 16, "bold")).pack()
-        tk.Label(self, text="Версия 1.5").pack()
-        tk.Label(self, text="Утилита для синхронизации файлов.").pack(pady=5)
+        try:
+            icon_path = Path(__file__).parent / "assets" / "icon.png"
+            original_image = Image.open(icon_path)
+            resized_image = original_image.resize((64, 64), Image.Resampling.LANCZOS)
+            self.icon_image = ImageTk.PhotoImage(resized_image)
+            
+            icon_label = tk.Label(main_frame, image=self.icon_image)
+            icon_label.grid(row=0, column=0, rowspan=3, padx=(0, 15), sticky="ns")
+
+        except Exception as e:
+            logging.warning(f"Не удалось загрузить иконку assets/icon.png: {e}")
+
+        tk.Label(main_frame, text="File Synchronizer", font=("Helvetica", 16, "bold")).grid(row=0, column=1, sticky="w")
+        tk.Label(main_frame, text="Версия 1.5").grid(row=1, column=1, sticky="w")
+        tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5,0))
         
-        tk.Button(self, text="Закрыть", command=self.destroy).pack(pady=15)
+        close_button = tk.Button(self, text="Закрыть", command=self.destroy)
+        close_button.pack(pady=(0, 15))
 
 class SyncApp:
     def __init__(self, master):
@@ -239,13 +247,12 @@ class SyncApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # Установка иконки для главного окна
     try:
         icon_path = Path(__file__).parent / "assets" / "icon.png"
         app_icon = tk.PhotoImage(file=icon_path)
         root.iconphoto(True, app_icon)
-    except tk.TclError:
-        print("Не удалось загрузить иконку приложения assets/icon.png")
+    except Exception as e:
+        print(f"Не удалось загрузить иконку приложения assets/icon.png: {e}")
 
     app = SyncApp(root)
     root.mainloop()

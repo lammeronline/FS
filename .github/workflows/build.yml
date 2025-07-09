@@ -37,7 +37,6 @@ jobs:
           copy dist\*.exe release_package\
           copy *.ini.example release_package\
           copy README.md release_package\
-          xcopy assets release_package\assets\ /E /I
         shell: cmd
 
       - name: Upload artifacts
