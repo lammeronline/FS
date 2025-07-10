@@ -17,38 +17,23 @@ APP_STATE_FILE = 'app_state.ini'
 class QueueHandler(logging.Handler):
     def __init__(self, log_queue): super().__init__(); self.log_queue = log_queue
     def emit(self, record): self.log_queue.put(self.format(record))
-class ContextMenu:
-    def __init__(self, master):
-        self.master = master; self.menu = tk.Menu(master, tearoff=0); self.menu.add_command(label="Вырезать", command=self.cut); self.menu.add_command(label="Копировать", command=self.copy); self.menu.add_command(label="Вставить", command=self.paste)
-        self.master.bind_class("Entry", "<Button-3>", self.popup)
-    def popup(self, event):
-        self.widget = event.widget
-        try: self.widget.focus(); self.menu.tk_popup(event.x_root, event.y_root)
-        finally: self.menu.grab_release()
-    def cut(self): self.widget.event_generate("<<Cut>>")
-    def copy(self): self.widget.event_generate("<<Copy>>")
-    def paste(self): self.widget.event_generate("<<Paste>>")
+
+# Класс ContextMenu был удален, так как его функциональность перенесена в SyncApp
 
 class SettingsWindow(Toplevel):
     def __init__(self, master):
         super().__init__(master); self.transient(master); self.title("Настройки"); self.geometry("420x280"); self.resizable(False, False); self.grab_set()
         self.config = configparser.ConfigParser(); self.config.read(sync_logic.CONFIG_FILE)
-        
-        self.notebook = ttk.Notebook(self)
-        self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
-
+        self.notebook = ttk.Notebook(self); self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
         # Вкладка Telegram
-        telegram_frame = tk.Frame(self.notebook, padx=10, pady=10)
-        self.notebook.add(telegram_frame, text='Telegram')
+        telegram_frame = tk.Frame(self.notebook, padx=10, pady=10); self.notebook.add(telegram_frame, text='Telegram')
         self.token_var = tk.StringVar(value=self.config.get('telegram', 'bot_token', fallback='')); self.chat_id_var = tk.StringVar(value=self.config.get('telegram', 'chat_id', fallback=''))
         self.enabled_var = tk.BooleanVar(value=self.config.getboolean('telegram', 'enabled', fallback=True))
         tk.Label(telegram_frame, text="Токен бота:").grid(row=0, column=0, sticky="w", pady=2); tk.Entry(telegram_frame, textvariable=self.token_var, width=40).grid(row=0, column=1, sticky="ew")
         tk.Label(telegram_frame, text="ID чата:").grid(row=1, column=0, sticky="w", pady=2); tk.Entry(telegram_frame, textvariable=self.chat_id_var, width=40).grid(row=1, column=1, sticky="ew")
         tk.Checkbutton(telegram_frame, text="Включить уведомления", variable=self.enabled_var).grid(row=2, columnspan=2, sticky="w", pady=5)
-        
         # Вкладка Производительность
-        perf_frame = tk.Frame(self.notebook, padx=10, pady=10)
-        self.notebook.add(perf_frame, text='Производительность')
+        perf_frame = tk.Frame(self.notebook, padx=10, pady=10); self.notebook.add(perf_frame, text='Производительность')
         self.comparison_mode_var = tk.StringVar(value=self.config.get('performance', 'comparison_mode', fallback='accurate'))
         self.use_parallel_var = tk.BooleanVar(value=self.config.getboolean('performance', 'use_parallel', fallback=False))
         tk.Label(perf_frame, text="Метод сравнения файлов:").pack(anchor="w")
@@ -56,7 +41,6 @@ class SettingsWindow(Toplevel):
         ttk.Radiobutton(perf_frame, text="Гибридный (дата/размер + хеш, быстро)", variable=self.comparison_mode_var, value='hybrid').pack(anchor="w", padx=10)
         ttk.Separator(perf_frame, orient='horizontal').pack(fill='x', pady=10)
         tk.Checkbutton(perf_frame, text="Использовать параллельное сканирование\n(ускоряет на многоядерных ЦП и SSD)", variable=self.use_parallel_var, justify="left").pack(anchor="w")
-
         btn_frame = tk.Frame(self); btn_frame.pack(pady=5)
         tk.Button(btn_frame, text="Сохранить", command=self.save_settings).pack(side="left", padx=5); tk.Button(btn_frame, text="Отмена", command=self.destroy).pack(side="left", padx=5)
 
@@ -78,15 +62,16 @@ class AboutWindow(Toplevel):
             icon_label = tk.Label(main_frame, image=self.icon_image); icon_label.grid(row=0, column=0, rowspan=3, padx=(0, 15), sticky="ns")
         except Exception as e: logging.warning(f"Не удалось загрузить иконку assets/icon.png: {e}")
         tk.Label(main_frame, text="File Synchronizer", font=("Helvetica", 16, "bold")).grid(row=0, column=1, sticky="w")
-        tk.Label(main_frame, text="Версия 2.1").grid(row=1, column=1, sticky="w"); tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5,0))
+        tk.Label(main_frame, text="Версия 2.2").grid(row=1, column=1, sticky="w"); tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5,0))
         close_button = tk.Button(self, text="Закрыть", command=self.destroy); close_button.pack(pady=(0, 15))
+
 
 class SyncApp:
     def __init__(self, master):
         self.master = master
         master.title("File Synchronizer"); master.minsize(700, 600); master.resizable(True, True)
-        self.create_menu()
         
+        # Переменные
         self.source_var, self.dest_var = tk.StringVar(), tk.StringVar()
         self.no_overwrite_var, self.delete_removed_var = tk.BooleanVar(), tk.BooleanVar()
         self.sync_empty_dirs_var = tk.BooleanVar()
@@ -98,37 +83,30 @@ class SyncApp:
         self.save_passwords_var = tk.BooleanVar()
         self.stop_event = None
         
+        # Создание интерфейса
+        self.create_menu()
         self.create_widgets()
+        self.create_context_menu() # <-- ИСПРАВЛЕНИЕ: новый метод для меню
+        
+        # Загрузка и логирование
         self._load_state()
-
-        self.context_menu = ContextMenu(self.master)
-
         self.log_queue = queue.Queue()
         sync_logic.setup_logging(QueueHandler(self.log_queue))
         self.master.after(100, self.poll_log_queue)
     
-    def start_sync_thread(self):
-        source, dest = self.source_var.get(), self.dest_var.get()
-        if not source or not dest: messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории."); return
-        self._save_state(); exclude_list = [p.strip() for p in self.exclude_patterns_var.get().split(',') if p.strip()]
-        source_creds, dest_creds = None, None
-        if self.source_is_network_var.get() and self.source_user_var.get() and self.source_pass_var.get(): source_creds = {'user': self.source_user_var.get(), 'password': self.source_pass_var.get()}
-        if self.dest_is_network_var.get() and self.dest_user_var.get() and self.dest_pass_var.get(): dest_creds = {'user': self.dest_user_var.get(), 'password': self.dest_pass_var.get()}
-        
-        config = configparser.ConfigParser(); config.read(sync_logic.CONFIG_FILE)
-        comparison_mode = config.get('performance', 'comparison_mode', fallback='accurate')
-        use_parallel = config.getboolean('performance', 'use_parallel', fallback=False)
+    # --- НОВЫЙ, ПРАВИЛЬНЫЙ СПОСОБ СОЗДАНИЯ КОНТЕКСТНОГО МЕНЮ ---
+    def create_context_menu(self):
+        self.context_menu = tk.Menu(self.master, tearoff=0)
+        self.context_menu.add_command(label="Вырезать", command=lambda: self.master.focus_get().event_generate("<<Cut>>"))
+        self.context_menu.add_command(label="Копировать", command=lambda: self.master.focus_get().event_generate("<<Copy>>"))
+        self.context_menu.add_command(label="Вставить", command=lambda: self.master.focus_get().event_generate("<<Paste>>"))
+        self.master.bind_class("Entry", "<Button-3>", self.show_context_menu)
 
-        self.stop_event = threading.Event(); self.sync_button.config(text="Остановить", command=self.stop_sync_thread, bg="#e74c3c")
-        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list, source_creds, dest_creds, self.stop_event, comparison_mode, use_parallel), daemon=True).start()
+    def show_context_menu(self, event):
+        widget = event.widget
+        widget.focus()
+        self.context_menu.tk_popup(event.x_root, event.y_root)
 
-    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event, comparison_mode, use_parallel):
-        try: sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event, comparison_mode, use_parallel)
-        except sync_logic.SyncCancelledError as e: logging.warning(f"Процесс синхронизации был корректно остановлен: {e}")
-        except Exception as e: messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
-        finally: self.sync_button.config(state="normal", text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50"); self.stop_event = None
-    
-    # ... (остальной код класса SyncApp, который не менялся, опущен для краткости)
     def create_widgets(self):
         main_frame = tk.Frame(self.master); main_frame.pack(fill="both", expand=True, padx=10, pady=5)
         path_frame = tk.LabelFrame(main_frame, text="Пути", padx=10, pady=10); path_frame.pack(fill="x")
@@ -159,6 +137,8 @@ class SyncApp:
         self.sync_button = tk.Button(main_frame, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold")); self.sync_button.pack(pady=10, ipadx=10, ipady=5)
         log_frame = tk.LabelFrame(main_frame, text="Лог выполнения", padx=10, pady=10); log_frame.pack(fill="both", expand=True, pady=5)
         self.log_area = scrolledtext.ScrolledText(log_frame, state='disabled', wrap=tk.WORD, bg="#2b2b2b", fg="#a9b7c6"); self.log_area.pack(fill="both", expand=True)
+
+    # ... (остальные методы класса SyncApp остаются без изменений)
     def create_menu(self):
         menubar = tk.Menu(self.master); self.master.config(menu=menubar)
         file_menu = tk.Menu(menubar, tearoff=0); file_menu.add_command(label="Импорт задачи...", command=self.import_job_file); file_menu.add_command(label="Экспорт задачи...", command=self.export_job_file); file_menu.add_separator(); file_menu.add_command(label="Настройки", command=self.open_settings); file_menu.add_separator(); file_menu.add_command(label="Выход", command=self.master.quit)
@@ -230,6 +210,16 @@ class SyncApp:
             state['s_user'] = base64.b64encode(self.source_user_var.get().encode('utf-8')).decode('utf-8'); state['s_pass'] = base64.b64encode(self.source_pass_var.get().encode('utf-8')).decode('utf-8')
             state['d_user'] = base64.b64encode(self.dest_user_var.get().encode('utf-8')).decode('utf-8'); state['d_pass'] = base64.b64encode(self.dest_pass_var.get().encode('utf-8')).decode('utf-8')
         with open(APP_STATE_FILE, 'w', encoding='utf-8') as configfile: config.write(configfile)
+    def start_sync_thread(self):
+        source, dest = self.source_var.get(), self.dest_var.get()
+        if not source or not dest: messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории."); return
+        self._save_state(); exclude_list = [p.strip() for p in self.exclude_patterns_var.get().split(',') if p.strip()]; source_creds, dest_creds = None, None
+        if self.source_is_network_var.get() and self.source_user_var.get() and self.source_pass_var.get(): source_creds = {'user': self.source_user_var.get(), 'password': self.source_pass_var.get()}
+        if self.dest_is_network_var.get() and self.dest_user_var.get() and self.dest_pass_var.get(): dest_creds = {'user': self.dest_user_var.get(), 'password': self.dest_pass_var.get()}
+        config = configparser.ConfigParser(); config.read(sync_logic.CONFIG_FILE)
+        comparison_mode = config.get('performance', 'comparison_mode', fallback='accurate'); use_parallel = config.getboolean('performance', 'use_parallel', fallback=False)
+        self.stop_event = threading.Event(); self.sync_button.config(text="Остановить", command=self.stop_sync_thread, bg="#e74c3c")
+        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list, source_creds, dest_creds, self.stop_event, comparison_mode, use_parallel), daemon=True).start()
     def stop_sync_thread(self):
         if self.stop_event: logging.info("Подан сигнал на остановку синхронизации..."); self.stop_event.set(); self.sync_button.config(state="disabled", text="Остановка...")
     def open_settings(self): SettingsWindow(self.master)
@@ -244,7 +234,6 @@ class SyncApp:
         self.master.after(100, self.poll_log_queue)
     def display_log(self, record):
         self.log_area.configure(state='normal'); self.log_area.insert(tk.END, record + '\n'); self.log_area.configure(state='disabled'); self.log_area.yview(tk.END)
-# ...
 
 if __name__ == "__main__":
     root = tk.Tk()
