@@ -16,6 +16,11 @@ CONFIG_FILE = 'config.ini'
 HASH_ALGORITHM = hashlib.sha256
 READ_BUFFER_SIZE = 65536
 
+# НОВОЕ кастомное исключение
+class SyncCancelledError(Exception):
+    """Исключение, вызываемое, когда пользователь отменяет синхронизацию."""
+    pass
+
 def setup_logging(gui_log_handler=None):
     handlers = [
         logging.FileHandler(LOG_FILE, encoding='utf-8'),
@@ -98,11 +103,14 @@ def calculate_file_hash(file_path):
         logging.error(f"Не удалось прочитать файл {file_path}: {e}")
         return None
 
-def get_files_map(directory, exclude_patterns=None):
+def get_files_map(directory, exclude_patterns=None, stop_event=None):
     files_map = {}
     root_path = Path(directory)
     logging.info(f"Сканирование директории: {directory}")
     for file_path in root_path.rglob('*'):
+        if stop_event and stop_event.is_set():
+            raise SyncCancelledError("Синхронизация прервана пользователем на этапе сканирования.")
+        
         if file_path.is_file():
             if exclude_patterns:
                 if any(fnmatch.fnmatch(file_path.name, pattern) for pattern in exclude_patterns):
@@ -114,7 +122,7 @@ def get_files_map(directory, exclude_patterns=None):
                 files_map[relative_path] = file_hash
     return files_map
 
-def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None):
+def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None, stop_event=None):
     source_path = Path(source_dir)
     dest_path = Path(dest_dir)
 
@@ -122,14 +130,16 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_
         logging.info(f"Целевая директория не существует. Создание: {dest_dir}")
         dest_path.mkdir(parents=True, exist_ok=True)
     
-    source_files = get_files_map(source_path, exclude_patterns)
-    dest_files = get_files_map(dest_path, exclude_patterns)
+    source_files = get_files_map(source_path, exclude_patterns, stop_event)
+    dest_files = get_files_map(dest_path, exclude_patterns, stop_event)
     
     stats = {"copied": 0, "updated": 0, "skipped": 0, "deleted": 0, "errors": 0, "dirs_created": 0}
 
     if sync_empty_dirs:
         logging.info("Синхронизация структуры директорий...")
         for dirpath, _, _ in os.walk(source_dir):
+            if stop_event and stop_event.is_set(): raise SyncCancelledError("Прервано на этапе синхронизации папок.")
+            
             relative_dir = Path(dirpath).relative_to(source_path)
             dest_dir_path = dest_path / relative_dir
             if not dest_dir_path.exists():
@@ -138,6 +148,8 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_
                 stats["dirs_created"] += 1
 
     for rel_path, source_hash in source_files.items():
+        if stop_event and stop_event.is_set(): raise SyncCancelledError("Прервано на этапе копирования файлов.")
+        
         dest_file_path = dest_path / rel_path
         if rel_path not in dest_files:
             logging.info(f"КОПИРОВАНИЕ: {rel_path}")
@@ -163,6 +175,8 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_
 
     if delete_removed:
         for rel_path in dest_files:
+            if stop_event and stop_event.is_set(): raise SyncCancelledError("Прервано на этапе удаления файлов.")
+            
             if rel_path not in source_files:
                 logging.info(f"УДАЛЕНИЕ: {rel_path}")
                 try:
@@ -181,7 +195,7 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_
                     logging.error(f"Ошибка удаления пустой директории {dirpath}: {e}")
     return stats
 
-def run_sync_session(source, destination, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None, source_creds=None, dest_creds=None):
+def run_sync_session(source, destination, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None, source_creds=None, dest_creds=None, stop_event=None):
     start_time = datetime.now()
     logging.info("="*50)
     logging.info("Начало сеанса синхронизации")
@@ -199,7 +213,8 @@ def run_sync_session(source, destination, no_overwrite, delete_removed, sync_emp
         if not ensure_path_is_ready(destination, dest_creds):
             raise ConnectionError(f"Целевой путь недоступен: {destination}")
 
-        stats = sync_folders(source, destination, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns)
+        stats = sync_folders(source, destination, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, stop_event)
+        
         duration = datetime.now() - start_time
         summary = (
             f"✅ *Синхронизация успешно завершена!*\n\n"
@@ -212,6 +227,17 @@ def run_sync_session(source, destination, no_overwrite, delete_removed, sync_emp
         )
         logging.info("\n" + summary.replace('*', '').replace('`', ''))
         send_telegram_notification(summary)
+    
+    except SyncCancelledError as e:
+        duration = datetime.now() - start_time
+        cancel_message = (
+            f"🟡 *Синхронизация прервана пользователем!*\n\n"
+            f"Процесс был остановлен после `{duration}`.\n"
+            f"Сообщение: `{e}`"
+        )
+        logging.warning(cancel_message.replace('*', '').replace('`', ''))
+        send_telegram_notification(cancel_message)
+        raise e
 
     except Exception as e:
         duration = datetime.now() - start_time

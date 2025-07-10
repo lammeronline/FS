@@ -27,28 +27,20 @@ class SettingsWindow(Toplevel):
         self.geometry("400x150")
         self.resizable(False, False)
         self.grab_set()
-
         self.config = configparser.ConfigParser()
         self.config.read(sync_logic.CONFIG_FILE)
-
         self.token_var = tk.StringVar(value=self.config.get('telegram', 'bot_token', fallback=''))
         self.chat_id_var = tk.StringVar(value=self.config.get('telegram', 'chat_id', fallback=''))
         self.enabled_var = tk.BooleanVar(value=self.config.getboolean('telegram', 'enabled', fallback=True))
-        
         frame = tk.Frame(self, padx=10, pady=10)
         frame.pack(fill="both", expand=True)
-
         tk.Label(frame, text="Токен бота:").grid(row=0, column=0, sticky="w", pady=2)
         tk.Entry(frame, textvariable=self.token_var, width=40).grid(row=0, column=1, sticky="ew")
-        
         tk.Label(frame, text="ID чата:").grid(row=1, column=0, sticky="w", pady=2)
         tk.Entry(frame, textvariable=self.chat_id_var, width=40).grid(row=1, column=1, sticky="ew")
-        
         tk.Checkbutton(frame, text="Включить уведомления", variable=self.enabled_var).grid(row=2, columnspan=2, sticky="w", pady=5)
-        
         btn_frame = tk.Frame(frame)
         btn_frame.grid(row=3, columnspan=2, pady=10)
-        
         tk.Button(btn_frame, text="Сохранить", command=self.save_settings).pack(side="left", padx=5)
         tk.Button(btn_frame, text="Отмена", command=self.destroy).pack(side="left", padx=5)
 
@@ -71,26 +63,20 @@ class AboutWindow(Toplevel):
         self.geometry("350x200") 
         self.resizable(False, False)
         self.grab_set()
-
         main_frame = tk.Frame(self)
         main_frame.pack(pady=15, padx=20, fill="both", expand=True)
-
         try:
             icon_path = Path(__file__).parent / "assets" / "icon.png"
             original_image = Image.open(icon_path)
             resized_image = original_image.resize((64, 64), Image.Resampling.LANCZOS)
             self.icon_image = ImageTk.PhotoImage(resized_image)
-            
             icon_label = tk.Label(main_frame, image=self.icon_image)
             icon_label.grid(row=0, column=0, rowspan=3, padx=(0, 15), sticky="ns")
-
         except Exception as e:
             logging.warning(f"Не удалось загрузить иконку assets/icon.png: {e}")
-
         tk.Label(main_frame, text="File Synchronizer", font=("Helvetica", 16, "bold")).grid(row=0, column=1, sticky="w")
-        tk.Label(main_frame, text="Версия 1.5").grid(row=1, column=1, sticky="w")
+        tk.Label(main_frame, text="Версия 1.6").grid(row=1, column=1, sticky="w")
         tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5,0))
-        
         close_button = tk.Button(self, text="Закрыть", command=self.destroy)
         close_button.pack(pady=(0, 15))
 
@@ -100,9 +86,7 @@ class SyncApp:
         master.title("File Synchronizer")
         master.minsize(700, 600)
         master.resizable(True, True)
-        
         self.create_menu()
-        
         self.source_var, self.dest_var = tk.StringVar(), tk.StringVar()
         self.no_overwrite_var, self.delete_removed_var = tk.BooleanVar(), tk.BooleanVar()
         self.sync_empty_dirs_var = tk.BooleanVar()
@@ -110,10 +94,9 @@ class SyncApp:
         self.source_is_network_var, self.dest_is_network_var = tk.BooleanVar(), tk.BooleanVar()
         self.source_user_var, self.source_pass_var = tk.StringVar(), tk.StringVar()
         self.dest_user_var, self.dest_pass_var = tk.StringVar(), tk.StringVar()
-        
+        self.stop_event = None
         self.create_widgets()
         self._load_state()
-
         self.log_queue = queue.Queue()
         sync_logic.setup_logging(QueueHandler(self.log_queue))
         self.master.after(100, self.poll_log_queue)
@@ -163,24 +146,14 @@ class SyncApp:
             self.source_pass_label.grid(row=2, column=0, sticky="e", padx=(10,0))
             self.source_pass_entry.grid(row=2, column=1, sticky="ew", padx=5)
         else:
-            self.source_user_label.grid_forget()
-            self.source_user_entry.grid_forget()
-            self.source_pass_label.grid_forget()
-            self.source_pass_entry.grid_forget()
-            self.source_user_var.set("")
-            self.source_pass_var.set("")
+            self.source_user_label.grid_forget(); self.source_user_entry.grid_forget(); self.source_pass_label.grid_forget(); self.source_pass_entry.grid_forget(); self.source_user_var.set(""); self.source_pass_var.set("")
         if self.dest_is_network_var.get():
             self.dest_user_label.grid(row=4, column=0, sticky="e", padx=(10,0))
             self.dest_user_entry.grid(row=4, column=1, sticky="ew", padx=5)
             self.dest_pass_label.grid(row=5, column=0, sticky="e", padx=(10,0))
             self.dest_pass_entry.grid(row=5, column=1, sticky="ew", padx=5)
         else:
-            self.dest_user_label.grid_forget()
-            self.dest_user_entry.grid_forget()
-            self.dest_pass_label.grid_forget()
-            self.dest_pass_entry.grid_forget()
-            self.dest_user_var.set("")
-            self.dest_pass_var.set("")
+            self.dest_user_label.grid_forget(); self.dest_user_entry.grid_forget(); self.dest_pass_label.grid_forget(); self.dest_pass_entry.grid_forget(); self.dest_user_var.set(""); self.dest_pass_var.set("")
 
     def start_sync_thread(self):
         source, dest = self.source_var.get(), self.dest_var.get()
@@ -192,8 +165,26 @@ class SyncApp:
         exclude_list = [p.strip() for p in exclude_str.split(',') if p.strip()]
         source_creds = {'user': self.source_user_var.get(), 'password': self.source_pass_var.get()} if self.source_is_network_var.get() else None
         dest_creds = {'user': self.dest_user_var.get(), 'password': self.dest_pass_var.get()} if self.dest_is_network_var.get() else None
-        self.sync_button.config(state="disabled", text="Синхронизация...")
-        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list, source_creds, dest_creds), daemon=True).start()
+        self.stop_event = threading.Event()
+        self.sync_button.config(text="Остановить", command=self.stop_sync_thread, bg="#e74c3c")
+        threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list, source_creds, dest_creds, self.stop_event), daemon=True).start()
+
+    def stop_sync_thread(self):
+        if self.stop_event:
+            logging.info("Подан сигнал на остановку синхронизации...")
+            self.stop_event.set()
+            self.sync_button.config(state="disabled", text="Остановка...")
+
+    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event):
+        try:
+            sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event)
+        except sync_logic.SyncCancelledError as e:
+            logging.warning(f"Процесс синхронизации был корректно остановлен: {e}")
+        except Exception as e:
+            messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
+        finally:
+            self.sync_button.config(state="normal", text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50")
+            self.stop_event = None
 
     def _load_state(self):
         config = configparser.ConfigParser()
@@ -240,10 +231,6 @@ class SyncApp:
         self.log_area.insert(tk.END, record + '\n')
         self.log_area.configure(state='disabled')
         self.log_area.yview(tk.END)
-    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds):
-        try: sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds)
-        except Exception as e: messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
-        finally: self.sync_button.config(state="normal", text="Начать синхронизацию")
 
 if __name__ == "__main__":
     root = tk.Tk()
@@ -253,6 +240,5 @@ if __name__ == "__main__":
         root.iconphoto(True, app_icon)
     except Exception as e:
         print(f"Не удалось загрузить иконку приложения assets/icon.png: {e}")
-
     app = SyncApp(root)
     root.mainloop()
