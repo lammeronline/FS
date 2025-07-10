@@ -18,7 +18,7 @@ class QueueHandler(logging.Handler):
     def __init__(self, log_queue): super().__init__(); self.log_queue = log_queue
     def emit(self, record): self.log_queue.put(self.format(record))
 
-# Класс ContextMenu был удален, так как его функциональность перенесена в SyncApp
+# Класс ContextMenu больше не нужен, его функциональность встроена в SyncApp
 
 class SettingsWindow(Toplevel):
     def __init__(self, master):
@@ -65,11 +65,12 @@ class AboutWindow(Toplevel):
         tk.Label(main_frame, text="Версия 2.2").grid(row=1, column=1, sticky="w"); tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5,0))
         close_button = tk.Button(self, text="Закрыть", command=self.destroy); close_button.pack(pady=(0, 15))
 
-
 class SyncApp:
     def __init__(self, master):
         self.master = master
         master.title("File Synchronizer"); master.minsize(700, 600); master.resizable(True, True)
+        
+        self.create_menu()
         
         # Переменные
         self.source_var, self.dest_var = tk.StringVar(), tk.StringVar()
@@ -84,9 +85,8 @@ class SyncApp:
         self.stop_event = None
         
         # Создание интерфейса
-        self.create_menu()
         self.create_widgets()
-        self.create_context_menu() # <-- ИСПРАВЛЕНИЕ: новый метод для меню
+        self.create_context_menu()
         
         # Загрузка и логирование
         self._load_state()
@@ -94,8 +94,8 @@ class SyncApp:
         sync_logic.setup_logging(QueueHandler(self.log_queue))
         self.master.after(100, self.poll_log_queue)
     
-    # --- НОВЫЙ, ПРАВИЛЬНЫЙ СПОСОБ СОЗДАНИЯ КОНТЕКСТНОГО МЕНЮ ---
     def create_context_menu(self):
+        """Создает универсальное контекстное меню и привязывает его к классу Entry."""
         self.context_menu = tk.Menu(self.master, tearoff=0)
         self.context_menu.add_command(label="Вырезать", command=lambda: self.master.focus_get().event_generate("<<Cut>>"))
         self.context_menu.add_command(label="Копировать", command=lambda: self.master.focus_get().event_generate("<<Copy>>"))
@@ -103,8 +103,8 @@ class SyncApp:
         self.master.bind_class("Entry", "<Button-3>", self.show_context_menu)
 
     def show_context_menu(self, event):
+        """Отображает контекстное меню."""
         widget = event.widget
-        widget.focus()
         self.context_menu.tk_popup(event.x_root, event.y_root)
 
     def create_widgets(self):
@@ -222,6 +222,11 @@ class SyncApp:
         threading.Thread(target=self.run_sync_task, args=(source, dest, self.no_overwrite_var.get(), self.delete_removed_var.get(), self.sync_empty_dirs_var.get(), exclude_list, source_creds, dest_creds, self.stop_event, comparison_mode, use_parallel), daemon=True).start()
     def stop_sync_thread(self):
         if self.stop_event: logging.info("Подан сигнал на остановку синхронизации..."); self.stop_event.set(); self.sync_button.config(state="disabled", text="Остановка...")
+    def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event, comparison_mode, use_parallel):
+        try: sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event, comparison_mode, use_parallel)
+        except sync_logic.SyncCancelledError as e: logging.warning(f"Процесс синхронизации был корректно остановлен: {e}")
+        except Exception as e: messagebox.showerror("Критическая ошибка", f"Синхронизация прервана с ошибкой:\n\n{e}\n\nПодробности в логе.")
+        finally: self.sync_button.config(state="normal", text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50"); self.stop_event = None
     def open_settings(self): SettingsWindow(self.master)
     def show_about(self): AboutWindow(self.master)
     def browse_source(self): self.source_var.set(filedialog.askdirectory() or self.source_var.get())
