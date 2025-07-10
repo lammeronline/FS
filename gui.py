@@ -13,6 +13,15 @@ import sync_logic
 
 APP_STATE_FILE = 'app_state.ini'
 
+# ВОЗВРАЩЕННЫЙ КЛАСС ДЛЯ ЛОГИРОВАНИЯ
+class QueueHandler(logging.Handler):
+    """Класс для перенаправления логов в текстовое поле GUI."""
+    def __init__(self, log_queue):
+        super().__init__()
+        self.log_queue = log_queue
+    def emit(self, record):
+        self.log_queue.put(self.format(record))
+
 class ContextMenu:
     """Контекстное меню для полей ввода."""
     def __init__(self, master):
@@ -35,7 +44,6 @@ class ContextMenu:
     def paste(self): self.widget.event_generate("<<Paste>>")
 
 class SettingsWindow(Toplevel):
-    # ... (код этого класса не меняется) ...
     def __init__(self, master):
         super().__init__(master)
         self.transient(master)
@@ -70,7 +78,6 @@ class SettingsWindow(Toplevel):
         self.destroy()
 
 class AboutWindow(Toplevel):
-    # ... (код этого класса не меняется) ...
     def __init__(self, master):
         super().__init__(master)
         self.transient(master)
@@ -124,7 +131,6 @@ class SyncApp:
     def create_widgets(self):
         main_frame = tk.Frame(self.master)
         main_frame.pack(fill="both", expand=True, padx=10, pady=5)
-
         path_frame = tk.LabelFrame(main_frame, text="Пути", padx=10, pady=10)
         path_frame.pack(fill="x")
         path_frame.columnconfigure(1, weight=1)
@@ -136,8 +142,6 @@ class SyncApp:
         self.dest_entry = tk.Entry(path_frame, textvariable=self.dest_var)
         self.dest_entry.grid(row=1, column=1, sticky="ew", padx=5)
         tk.Button(path_frame, text="Обзор...", command=self.browse_dest).grid(row=1, column=2, padx=(0,5))
-
-        # --- СВОРАЧИВАЕМАЯ ПАНЕЛЬ СЕТЕВЫХ НАСТРОЕК ---
         self.net_frame = tk.LabelFrame(main_frame, text="Сетевые ресурсы (UNC-пути)", padx=10, pady=10)
         self.net_frame.pack(fill="x", pady=5)
         self.net_creds_check = tk.Checkbutton(self.net_frame, text="Задать учетные данные для сетевых ресурсов", variable=self.show_net_creds_var, command=self.toggle_net_creds_visibility)
@@ -157,9 +161,7 @@ class SyncApp:
         self.dest_pass_entry = tk.Entry(self.creds_container, textvariable=self.dest_pass_var, show="*")
         self.dest_pass_entry.grid(row=3, column=1, sticky="ew", padx=2, pady=2)
         tk.Checkbutton(self.creds_container, text="Запомнить пароли (хранятся в небезопасном виде)", variable=self.save_passwords_var).grid(row=4, column=0, columnspan=2, sticky="w", pady=(5,0))
-
         options_frame = tk.LabelFrame(main_frame, text="Опции", padx=10, pady=10)
-        # ... (код options_frame, exclude_frame, sync_button, log_frame без изменений) ...
         options_frame.pack(fill="x", pady=5)
         tk.Checkbutton(options_frame, text="Не перезаписывать измененные файлы", variable=self.no_overwrite_var).pack(anchor="w")
         tk.Checkbutton(options_frame, text="Удалять лишние файлы в назначении (ОСТОРОЖНО!)", variable=self.delete_removed_var).pack(anchor="w")
@@ -175,17 +177,11 @@ class SyncApp:
         log_frame.pack(fill="both", expand=True, pady=5)
         self.log_area = scrolledtext.ScrolledText(log_frame, state='disabled', wrap=tk.WORD, bg="#2b2b2b", fg="#a9b7c6")
         self.log_area.pack(fill="both", expand=True)
-
         self.setup_context_menus()
 
     def setup_context_menus(self):
         context_menu = ContextMenu(self.master)
-        widgets_with_menu = [
-            self.source_entry, self.dest_entry,
-            self.source_user_entry, self.source_pass_entry,
-            self.dest_user_entry, self.dest_pass_entry,
-            self.exclude_entry
-        ]
+        widgets_with_menu = [self.source_entry, self.dest_entry, self.source_user_entry, self.source_pass_entry, self.dest_user_entry, self.dest_pass_entry, self.exclude_entry]
         for widget in widgets_with_menu:
             widget.bind("<Button-3><ButtonRelease-3>", context_menu.popup)
 
@@ -196,7 +192,6 @@ class SyncApp:
             self.creds_container.pack_forget()
 
     def start_sync_thread(self):
-        # ... (код start_sync_thread почти без изменений, только сборка creds)
         source, dest = self.source_var.get(), self.dest_var.get()
         if not source or not dest: messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории."); return
         self._save_state()
@@ -259,7 +254,6 @@ class SyncApp:
         with open(APP_STATE_FILE, 'w', encoding='utf-8') as configfile: config.write(configfile)
 
     def create_menu(self):
-        # ... (код create_menu, open_settings, show_about, browse, poll_log_queue без изменений) ...
         menubar = tk.Menu(self.master)
         self.master.config(menu=menubar)
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -270,6 +264,7 @@ class SyncApp:
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="О программе", command=self.show_about)
         menubar.add_cascade(label="Справка", menu=help_menu)
+
     def open_settings(self): SettingsWindow(self.master)
     def show_about(self): AboutWindow(self.master)
     def browse_source(self): self.source_var.set(filedialog.askdirectory() or self.source_var.get())
