@@ -58,9 +58,7 @@ class SyncApp:
         self.master = master
         master.title("File Synchronizer"); master.minsize(700, 600)
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
-        
         self.active_widget = None
-        
         self._initialize_variables()
         self._create_widgets()
         self._setup_background_tasks()
@@ -75,27 +73,40 @@ class SyncApp:
 
     def _create_widgets(self):
         self.main_frame = tk.Frame(self.master); self.main_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        self.main_frame.columnconfigure(0, weight=1); self.main_frame.rowconfigure(5, weight=1)
-        path_frame = tk.LabelFrame(self.main_frame, text="Пути", padx=10, pady=10); path_frame.grid(row=0, column=0, sticky="ew"); path_frame.columnconfigure(1, weight=1)
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.rowconfigure(5, weight=1)
+        
+        path_frame = tk.LabelFrame(self.main_frame, text="Пути", padx=10, pady=10); path_frame.grid(row=0, column=0, sticky="ew", pady=(0,5)); path_frame.columnconfigure(1, weight=1)
         tk.Label(path_frame, text="Источник:").grid(row=0, column=0, sticky="w", pady=(0,5)); self.source_entry = tk.Entry(path_frame, textvariable=self.source_var); self.source_entry.grid(row=0, column=1, sticky="ew", padx=5); tk.Button(path_frame, text="Обзор...", command=self.browse_source).grid(row=0, column=2, padx=(0,5)); tk.Checkbutton(path_frame, text="Сетевой путь", variable=self.source_is_network_var, command=self.toggle_source_creds).grid(row=0, column=3, sticky="w")
         self.source_user_label = tk.Label(path_frame, text="  Пользователь:"); self.source_user_entry = tk.Entry(path_frame, textvariable=self.source_user_var); self.source_pass_label = tk.Label(path_frame, text="  Пароль:"); self.source_pass_entry = tk.Entry(path_frame, textvariable=self.source_pass_var, show="*"); self.source_show_pass_check = tk.Checkbutton(path_frame, text="Показать", variable=self.source_show_pass_var, command=self.toggle_source_pass_visibility)
         ttk.Separator(path_frame, orient='horizontal').grid(row=4, columnspan=4, sticky='ew', pady=10)
         tk.Label(path_frame, text="Назначение:").grid(row=5, column=0, sticky="w", pady=(5,5)); self.dest_entry = tk.Entry(path_frame, textvariable=self.dest_var); self.dest_entry.grid(row=5, column=1, sticky="ew", padx=5); tk.Button(path_frame, text="Обзор...", command=self.browse_dest).grid(row=5, column=2, padx=(0,5)); tk.Checkbutton(path_frame, text="Сетевой путь", variable=self.dest_is_network_var, command=self.toggle_dest_creds).grid(row=5, column=3, sticky="w")
         self.dest_user_label = tk.Label(path_frame, text="  Пользователь:"); self.dest_user_entry = tk.Entry(path_frame, textvariable=self.dest_user_var); self.dest_pass_label = tk.Label(path_frame, text="  Пароль:"); self.dest_pass_entry = tk.Entry(path_frame, textvariable=self.dest_pass_var, show="*"); self.dest_show_pass_check = tk.Checkbutton(path_frame, text="Показать", variable=self.dest_show_pass_var, command=self.toggle_dest_pass_visibility)
         self.save_pass_check = tk.Checkbutton(path_frame, text="Запомнить пароли (хранятся в небезопасном виде)", variable=self.save_passwords_var)
+        
         options_frame = tk.LabelFrame(self.main_frame, text="Опции", padx=10, pady=10); options_frame.grid(row=1, column=0, sticky="ew", pady=5)
         tk.Checkbutton(options_frame, text="Не перезаписывать измененные файлы", variable=self.no_overwrite_var).pack(anchor="w"); tk.Checkbutton(options_frame, text="Удалять лишние файлы в назначении", variable=self.delete_removed_var).pack(anchor="w"); tk.Checkbutton(options_frame, text="Синхронизировать пустые папки", variable=self.sync_empty_dirs_var).pack(anchor="w")
         ttk.Separator(options_frame, orient='horizontal').pack(fill='x', pady=5); tk.Checkbutton(options_frame, text="Использовать безопасное удаление (в корзину)", variable=self.use_trash_var).pack(anchor="w"); tk.Checkbutton(options_frame, text="Использовать транзакционное копирование (надежнее)", variable=self.use_staging_var).pack(anchor="w")
-        exclude_frame = tk.LabelFrame(self.main_frame, text="Исключения", padx=10, pady=10); exclude_frame.grid(row=2, column=0, sticky="ew", pady=5); tk.Label(exclude_frame, text="Исключить файлы (шаблоны через запятую):").pack(anchor="w"); self.exclude_entry = tk.Entry(exclude_frame, textvariable=self.exclude_patterns_var); self.exclude_entry.pack(fill="x")
+        
+        exclude_frame = tk.LabelFrame(self.main_frame, text="Исключения", padx=10, pady=10); exclude_frame.grid(row=2, column=0, sticky="ew", pady=5)
+        tk.Label(exclude_frame, text="Исключить файлы (шаблоны через запятую):").pack(anchor="w"); self.exclude_entry = tk.Entry(exclude_frame, textvariable=self.exclude_patterns_var); self.exclude_entry.pack(fill="x")
+        
         self.sync_button = tk.Button(self.main_frame, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold")); self.sync_button.grid(row=3, column=0, pady=10)
+        
         self.progress_frame = tk.LabelFrame(self.main_frame, text="Прогресс", padx=10, pady=10); self.progress_frame.grid(row=4, column=0, sticky="ew", pady=(5,0))
         self.status_label = tk.Label(self.progress_frame, textvariable=self.status_text_var, anchor="w"); self.overall_progress = ttk.Progressbar(self.progress_frame, orient="horizontal", mode="determinate"); self.status_label.pack(fill="x"); self.overall_progress.pack(fill="x", pady=(5, 0))
-        self.log_frame = tk.LabelFrame(self.main_frame, text="Лог выполнения", padx=10, pady=10); self.log_frame.grid(row=5, column=0, sticky="nsew"); self.log_frame.rowconfigure(0, weight=1); self.log_frame.columnconfigure(0, weight=1)
+
+        self.log_frame = tk.LabelFrame(self.main_frame, text="Лог выполнения", padx=10, pady=10); self.log_frame.grid(row=5, column=0, sticky="nsew")
+        self.log_frame.rowconfigure(0, weight=1); self.log_frame.columnconfigure(0, weight=1)
         self.log_area = scrolledtext.ScrolledText(self.log_frame, state='disabled', wrap=tk.WORD, bg="#2b2b2b", fg="#a9b7c6"); self.log_area.grid(row=0, column=0, sticky="nsew")
 
     def _setup_background_tasks(self):
-        self.create_menu(); self.create_context_menu(); self._load_state()
-        self.log_queue = queue.Queue(); sync_logic.setup_logging(QueueHandler(self.log_queue)); self.master.after(100, self.poll_log_queue)
+        self.create_menu()
+        self.create_context_menu()
+        self._load_state()
+        self.log_queue = queue.Queue()
+        sync_logic.setup_logging(QueueHandler(self.log_queue))
+        self.master.after(100, self.poll_log_queue)
 
     def create_menu(self):
         menubar = tk.Menu(self.master); self.master.config(menu=menubar)
@@ -105,50 +116,57 @@ class SyncApp:
         menubar.add_cascade(label="Справка", menu=help_menu)
     
     def create_context_menu(self):
-        self.context_menu = tk.Menu(self.master, tearoff=0)
-        self.context_menu.add_command(label="Вырезать", command=self.cut)
-        self.context_menu.add_command(label="Копировать", command=self.copy)
-        self.context_menu.add_command(label="Вставить", command=self.paste)
-        self.master.bind_class("Entry", "<Button-3>", self.show_context_menu)
+        menu = tk.Menu(self.master, tearoff=0)
+        menu.add_command(label="Вырезать", command=lambda: self.master.focus_get().event_generate("<<Cut>>"))
+        menu.add_command(label="Копировать", command=lambda: self.master.focus_get().event_generate("<<Copy>>"))
+        menu.add_command(label="Вставить", command=lambda: self.master.focus_get().event_generate("<<Paste>>"))
+        self.master.bind_class("Entry", "<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-    def show_context_menu(self, event):
-        self.active_widget = event.widget
-        self.context_menu.tk_popup(event.x_root, event.y_root)
-
-    def cut(self):
-        if self.active_widget:
-            try:
-                text = self.active_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
-                self.master.clipboard_clear()
-                self.master.clipboard_append(text)
-                self.active_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
-            except tk.TclError: pass # No selection
-    
-    def copy(self):
-        if self.active_widget:
-            try:
-                text = self.active_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
-                self.master.clipboard_clear()
-                self.master.clipboard_append(text)
-            except tk.TclError: pass # No selection
-
-    def paste(self):
-        if self.active_widget:
-            try:
-                text = self.master.clipboard_get()
-                self.active_widget.insert(tk.INSERT, text)
-            except tk.TclError: pass # Clipboard is empty
-    
     def import_job_file(self):
-        # ... (код без изменений)
+        filepath = filedialog.askopenfilename(filetypes=[("Job Files", "*.ini"), ("All Files", "*.*")],title="Импортировать файл задачи")
+        if not filepath: return
+        try:
+            job_config = configparser.ConfigParser();
+            if not job_config.read(filepath, encoding='utf-8'): raise FileNotFoundError("Файл пуст или не найден.")
+            if 'SyncJob' not in job_config: raise configparser.NoSectionError('SyncJob')
+            job = job_config['SyncJob']; self.source_var.set(job.get('source', '')); self.dest_var.set(job.get('destination', '')); self.no_overwrite_var.set(job.getboolean('no_overwrite', False)); self.delete_removed_var.set(job.getboolean('delete_removed', False)); self.sync_empty_dirs_var.set(job.getboolean('sync_empty_dirs', False)); self.exclude_patterns_var.set(job.get('exclude', ''))
+            self.use_staging_var.set(job.getboolean('use_staging', fallback=True)); self.use_trash_var.set(job.getboolean('use_trash', fallback=True))
+            if 'SourceNetCreds' in job_config: self.source_is_network_var.set(True); s_creds = job_config['SourceNetCreds']; self.source_user_var.set(s_creds.get('user', '')); self.source_pass_var.set(s_creds.get('password', ''))
+            else: self.source_is_network_var.set(False)
+            if 'DestNetCreds' in job_config: self.dest_is_network_var.set(True); d_creds = job_config['DestNetCreds']; self.dest_user_var.set(d_creds.get('user', '')); self.dest_pass_var.set(d_creds.get('password', ''))
+            else: self.dest_is_network_var.set(False)
+            self.toggle_source_creds(); self.toggle_dest_creds(); messagebox.showinfo("Успешно", "Задача успешно импортирована.")
+        except Exception as e: messagebox.showerror("Ошибка импорта", f"Не удалось импортировать файл задачи:\n{e}")
+
     def export_job_file(self):
-        # ... (код без изменений)
+        filepath = filedialog.asksaveasfilename(defaultextension=".ini",filetypes=[("Job Files", "*.ini"), ("All Files", "*.*")],title="Экспортировать файл задачи")
+        if not filepath: return
+        job_config = configparser.ConfigParser(); job_config.add_section('SyncJob')
+        job_config.set('SyncJob', 'source', self.source_var.get()); job_config.set('SyncJob', 'destination', self.dest_var.get()); job_config.set('SyncJob', 'no_overwrite', str(self.no_overwrite_var.get()).lower()); job_config.set('SyncJob', 'delete_removed', str(self.delete_removed_var.get()).lower()); job_config.set('SyncJob', 'sync_empty_dirs', str(self.sync_empty_dirs_var.get()).lower()); job_config.set('SyncJob', 'exclude', self.exclude_patterns_var.get())
+        job_config.set('SyncJob', 'use_staging', str(self.use_staging_var.get()).lower()); job_config.set('SyncJob', 'use_trash', str(self.use_trash_var.get()).lower())
+        config = configparser.ConfigParser(); config.read(sync_logic.CONFIG_FILE)
+        job_config.set('SyncJob', 'comparison_mode', config.get('performance', 'comparison_mode', fallback='accurate')); job_config.set('SyncJob', 'use_parallel', config.get('performance', 'use_parallel', fallback='false'))
+        if self.source_is_network_var.get() and self.source_user_var.get(): job_config.add_section('SourceNetCreds'); job_config.set('SourceNetCreds', 'user', self.source_user_var.get()); job_config.set('SourceNetCreds', 'password', self.source_pass_var.get())
+        if self.dest_is_network_var.get() and self.dest_user_var.get(): job_config.add_section('DestNetCreds'); job_config.set('DestNetCreds', 'user', self.dest_user_var.get()); job_config.set('DestNetCreds', 'password', self.dest_pass_var.get())
+        try:
+            with open(filepath, 'w', encoding='utf-8') as configfile: job_config.write(configfile)
+            messagebox.showinfo("Успешно", f"Задача успешно экспортирована в:\n{filepath}")
+        except Exception as e: messagebox.showerror("Ошибка", f"Не удалось экспортировать файл задачи:\n{e}")
+
     def toggle_source_creds(self):
-        # ... (код без изменений)
+        if self.source_is_network_var.get(): self.source_user_label.grid(row=1, column=0, sticky="e", padx=(10,0)); self.source_user_entry.grid(row=1, column=1, sticky="ew", padx=5); self.source_pass_label.grid(row=2, column=0, sticky="e", padx=(10,0)); self.source_pass_entry.grid(row=2, column=1, sticky="ew", padx=5); self.source_show_pass_check.grid(row=2, column=2, sticky="w")
+        else: self.source_user_label.grid_forget(); self.source_user_entry.grid_forget(); self.source_pass_label.grid_forget(); self.source_pass_entry.grid_forget(); self.source_show_pass_check.grid_forget(); self.source_user_var.set(""); self.source_pass_var.set("")
+        self.update_save_pass_visibility()
+    
     def toggle_dest_creds(self):
-        # ... (код без изменений)
+        if self.dest_is_network_var.get(): self.dest_user_label.grid(row=6, column=0, sticky="e", padx=(10,0)); self.dest_user_entry.grid(row=6, column=1, sticky="ew", padx=5); self.dest_pass_label.grid(row=7, column=0, sticky="e", padx=(10,0)); self.dest_pass_entry.grid(row=7, column=1, sticky="ew", padx=5); self.dest_show_pass_check.grid(row=7, column=2, sticky="w")
+        else: self.dest_user_label.grid_forget(); self.dest_user_entry.grid_forget(); self.dest_pass_label.grid_forget(); self.dest_pass_entry.grid_forget(); self.dest_show_pass_check.grid_forget(); self.dest_user_var.set(""); self.dest_pass_var.set("")
+        self.update_save_pass_visibility()
+
     def update_save_pass_visibility(self):
-        # ... (код без изменений)
+        if self.source_is_network_var.get() or self.dest_is_network_var.get(): self.save_pass_check.grid(row=8, columnspan=4, sticky='w', pady=(10,0))
+        else: self.save_pass_check.grid_forget(); self.save_passwords_var.set(False)
+
     def toggle_source_pass_visibility(self): self.source_pass_entry.config(show="" if self.source_show_pass_var.get() else "*")
     def toggle_dest_pass_visibility(self): self.dest_pass_entry.config(show="" if self.dest_show_pass_var.get() else "*")
 
@@ -190,13 +208,21 @@ class SyncApp:
     def start_sync_thread(self):
         source, dest = self.source_var.get(), self.dest_var.get()
         if not source or not dest: messagebox.showerror("Ошибка", "Необходимо указать исходную и целевую директории."); return
-        self._save_state(); self.progress_frame.grid(row=4, column=0, sticky="ew", pady=(5,0)); self.update_progress('overall', 0, 1, "Подготовка...")
+        self._save_state()
+        self.progress_frame.grid(row=4, column=0, sticky="ew", pady=(5,0))
+        self.update_progress('overall', 0, 1, "Подготовка...")
+        
         exclude_list = [p.strip() for p in self.exclude_patterns_var.get().split(',') if p.strip()]
         source_creds = {'user': self.source_user_var.get(), 'password': self.source_pass_var.get()} if self.source_is_network_var.get() and self.source_user_var.get() else None
         dest_creds = {'user': self.dest_user_var.get(), 'password': self.dest_pass_var.get()} if self.dest_is_network_var.get() and self.dest_user_var.get() else None
+        
         config = configparser.ConfigParser(); config.read(sync_logic.CONFIG_FILE)
-        comparison_mode = config.get('performance', 'comparison_mode', fallback='accurate'); use_parallel = config.getboolean('performance', 'use_parallel', fallback=False)
-        self.stop_event = threading.Event(); self.sync_button.config(text="Остановить", command=self.stop_sync_thread, bg="#e74c3c")
+        comparison_mode = config.get('performance', 'comparison_mode', fallback='accurate')
+        use_parallel = config.getboolean('performance', 'use_parallel', fallback=False)
+        
+        self.stop_event = threading.Event()
+        self.sync_button.config(text="Остановить", command=self.stop_sync_thread, bg="#e74c3c")
+        
         progress_callback = lambda *args: self.log_queue.put(('progress', args))
         
         thread_args = (
@@ -205,7 +231,10 @@ class SyncApp:
             self.use_staging_var.get(), self.use_trash_var.get(), progress_callback
         )
         threading.Thread(target=self.run_sync_task, args=thread_args, daemon=True).start()
-
+    
+    def stop_sync_thread(self):
+        if self.stop_event: logging.info("Подан сигнал на остановку синхронизации..."); self.stop_event.set(); self.sync_button.config(state="disabled", text="Остановка...")
+    
     def run_sync_task(self, source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event, comparison_mode, use_parallel, use_staging, use_trash, progress_callback):
         try:
             sync_logic.run_sync_session(source, dest, no_overwrite, delete_removed, sync_empty_dirs, exclude_patterns, source_creds, dest_creds, stop_event, comparison_mode, use_parallel, use_staging, use_trash, progress_callback)
@@ -220,9 +249,6 @@ class SyncApp:
             self.progress_frame.grid_remove()
             self.sync_button.config(state="normal", text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50")
             self.stop_event = None
-
-    def stop_sync_thread(self):
-        if self.stop_event: logging.info("Подан сигнал на остановку синхронизации..."); self.stop_event.set(); self.sync_button.config(state="disabled", text="Остановка...")
     
     def on_closing(self):
         if self.stop_event and not self.stop_event.is_set():
