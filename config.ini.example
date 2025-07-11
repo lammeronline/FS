@@ -1,9 +1,17 @@
 [telegram]
 # Чтобы получить токен, создайте нового бота через @BotFather в Telegram.
 bot_token = YOUR_TELEGRAM_BOT_TOKEN
-
 # Чтобы получить ваш Chat ID, напишите боту @userinfobot.
 chat_id = YOUR_TELEGRAM_CHAT_ID
-
 # Установите в false, если не хотите получать уведомления
 enabled = true
+
+[performance]
+# Режим сравнения файлов:
+# accurate - точный по хешу, самый надежный, но медленный
+# hybrid - быстрый, сравнивает по дате/размеру, а хеш только если они отличаются
+comparison_mode = accurate
+
+# Использовать параллельное сканирование (true/false)
+# Ускоряет процесс на многоядерных ЦП и быстрых дисках (SSD)
+use_parallel = false

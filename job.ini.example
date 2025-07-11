@@ -1,17 +1,23 @@
 # Шаблон файла задачи для синхронизации через командную строку.
 [SyncJob]
-source = \\server1\shared_folder\source
-destination = D:\Backup\project_a
+source = C:\Source
+destination = D:\Destination_Backup
 no_overwrite = false
 delete_removed = true
-sync_empty_dirs = false
-exclude = *.bak, ~*.*, Thumbs.db
+sync_empty_dirs = true
+exclude = *.log, *.tmp, Thumbs.db, .DS_Store
+
+# Настройки надежности
+# Использовать транзакционное копирование (true/false). Защищает файлы от повреждения.
+use_staging = true
+# Использовать безопасное удаление (true/false). Перемещает файлы в .sync_trash.
+use_trash = true
 
 # Настройки производительности
 # Режим сравнения: accurate (точный по хешу) или hybrid (быстрый по дате/размеру + хеш)
-comparison_mode = accurate
+comparison_mode = hybrid
 # Использовать параллельное сканирование (true/false)
-use_parallel = false
+use_parallel = true
 
 # Секции для учетных данных сетевых ресурсов.
 # Раскомментируйте и заполните, если путь - сетевой и требует аутентификации.
