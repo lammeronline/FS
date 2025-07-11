@@ -18,87 +18,203 @@ import sync_logic
 APP_STATE_FILE = 'app_state.ini'
 
 class QueueHandler(logging.Handler):
-    def __init__(self, log_queue): super().__init__(); self.log_queue = log_queue
-    def emit(self, record): self.log_queue.put(self.format(record))
+    """Класс для перенаправления логов в текстовое поле GUI."""
+    def __init__(self, log_queue):
+        super().__init__()
+        self.log_queue = log_queue
+    def emit(self, record):
+        self.log_queue.put(self.format(record))
 
 class SettingsWindow(Toplevel):
+    """Окно настроек с вкладками."""
     def __init__(self, master):
-        super().__init__(master); self.transient(master); self.title("Настройки"); self.geometry("420x280"); self.resizable(False, False); self.grab_set()
-        self.config = configparser.ConfigParser(); self.config.read(sync_logic.CONFIG_FILE); self.notebook = ttk.Notebook(self); self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
-        telegram_frame = tk.Frame(self.notebook, padx=10, pady=10); self.notebook.add(telegram_frame, text='Telegram')
-        self.token_var = tk.StringVar(value=self.config.get('telegram', 'bot_token', fallback='')); self.chat_id_var = tk.StringVar(value=self.config.get('telegram', 'chat_id', fallback='')); self.enabled_var = tk.BooleanVar(value=self.config.getboolean('telegram', 'enabled', fallback=True))
-        tk.Label(telegram_frame, text="Токен бота:").grid(row=0, column=0, sticky="w", pady=2); tk.Entry(telegram_frame, textvariable=self.token_var, width=40).grid(row=0, column=1, sticky="ew"); tk.Label(telegram_frame, text="ID чата:").grid(row=1, column=0, sticky="w", pady=2); tk.Entry(telegram_frame, textvariable=self.chat_id_var, width=40).grid(row=1, column=1, sticky="ew"); tk.Checkbutton(telegram_frame, text="Включить уведомления", variable=self.enabled_var).grid(row=2, columnspan=2, sticky="w", pady=5)
-        perf_frame = tk.Frame(self.notebook, padx=10, pady=10); self.notebook.add(perf_frame, text='Производительность')
-        self.comparison_mode_var = tk.StringVar(value=self.config.get('performance', 'comparison_mode', fallback='accurate')); self.use_parallel_var = tk.BooleanVar(value=self.config.getboolean('performance', 'use_parallel', fallback=False))
-        tk.Label(perf_frame, text="Метод сравнения файлов:").pack(anchor="w"); ttk.Radiobutton(perf_frame, text="Точный (по хешу, медленно, надежно)", variable=self.comparison_mode_var, value='accurate').pack(anchor="w", padx=10); ttk.Radiobutton(perf_frame, text="Гибридный (дата/размер + хеш, быстро)", variable=self.comparison_mode_var, value='hybrid').pack(anchor="w", padx=10); ttk.Separator(perf_frame, orient='horizontal').pack(fill='x', pady=10); tk.Checkbutton(perf_frame, text="Использовать параллельное сканирование\n(ускоряет на многоядерных ЦП и SSD)", variable=self.use_parallel_var, justify="left").pack(anchor="w")
-        btn_frame = tk.Frame(self); btn_frame.pack(pady=5); tk.Button(btn_frame, text="Сохранить", command=self.save_settings).pack(side="left", padx=5); tk.Button(btn_frame, text="Отмена", command=self.destroy).pack(side="left", padx=5)
+        super().__init__(master)
+        self.transient(master)
+        self.title("Настройки")
+        self.geometry("420x280")
+        self.resizable(False, False)
+        self.grab_set()
+        
+        self.config = configparser.ConfigParser()
+        self.config.read(sync_logic.CONFIG_FILE)
+        
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(pady=10, padx=10, fill="both", expand=True)
+
+        telegram_frame = tk.Frame(self.notebook, padx=10, pady=10)
+        self.notebook.add(telegram_frame, text='Telegram')
+        self.token_var = tk.StringVar(value=self.config.get('telegram', 'bot_token', fallback=''))
+        self.chat_id_var = tk.StringVar(value=self.config.get('telegram', 'chat_id', fallback=''))
+        self.enabled_var = tk.BooleanVar(value=self.config.getboolean('telegram', 'enabled', fallback=True))
+        tk.Label(telegram_frame, text="Токен бота:").grid(row=0, column=0, sticky="w", pady=2)
+        tk.Entry(telegram_frame, textvariable=self.token_var, width=40).grid(row=0, column=1, sticky="ew")
+        tk.Label(telegram_frame, text="ID чата:").grid(row=1, column=0, sticky="w", pady=2)
+        tk.Entry(telegram_frame, textvariable=self.chat_id_var, width=40).grid(row=1, column=1, sticky="ew")
+        tk.Checkbutton(telegram_frame, text="Включить уведомления", variable=self.enabled_var).grid(row=2, columnspan=2, sticky="w", pady=5)
+        
+        perf_frame = tk.Frame(self.notebook, padx=10, pady=10)
+        self.notebook.add(perf_frame, text='Производительность')
+        self.comparison_mode_var = tk.StringVar(value=self.config.get('performance', 'comparison_mode', fallback='accurate'))
+        self.use_parallel_var = tk.BooleanVar(value=self.config.getboolean('performance', 'use_parallel', fallback=False))
+        tk.Label(perf_frame, text="Метод сравнения файлов:").pack(anchor="w")
+        ttk.Radiobutton(perf_frame, text="Точный (по хешу, медленно, надежно)", variable=self.comparison_mode_var, value='accurate').pack(anchor="w", padx=10)
+        ttk.Radiobutton(perf_frame, text="Гибридный (дата/размер + хеш, быстро)", variable=self.comparison_mode_var, value='hybrid').pack(anchor="w", padx=10)
+        ttk.Separator(perf_frame, orient='horizontal').pack(fill='x', pady=10)
+        tk.Checkbutton(perf_frame, text="Использовать параллельное сканирование\n(ускоряет на многоядерных ЦП и SSD)", variable=self.use_parallel_var, justify="left").pack(anchor="w")
+
+        btn_frame = tk.Frame(self)
+        btn_frame.pack(pady=5)
+        tk.Button(btn_frame, text="Сохранить", command=self.save_settings).pack(side="left", padx=5)
+        tk.Button(btn_frame, text="Отмена", command=self.destroy).pack(side="left", padx=5)
+
     def save_settings(self):
         if not self.config.has_section('telegram'): self.config.add_section('telegram')
-        self.config.set('telegram', 'bot_token', self.token_var.get()); self.config.set('telegram', 'chat_id', self.chat_id_var.get()); self.config.set('telegram', 'enabled', str(self.enabled_var.get()))
+        self.config.set('telegram', 'bot_token', self.token_var.get())
+        self.config.set('telegram', 'chat_id', self.chat_id_var.get())
+        self.config.set('telegram', 'enabled', str(self.enabled_var.get()))
         if not self.config.has_section('performance'): self.config.add_section('performance')
-        self.config.set('performance', 'comparison_mode', self.comparison_mode_var.get()); self.config.set('performance', 'use_parallel', str(self.use_parallel_var.get()))
-        with open(sync_logic.CONFIG_FILE, 'w', encoding='utf-8') as configfile: self.config.write(configfile)
-        messagebox.showinfo("Сохранено", "Настройки успешно сохранены.", parent=self); self.destroy()
+        self.config.set('performance', 'comparison_mode', self.comparison_mode_var.get())
+        self.config.set('performance', 'use_parallel', str(self.use_parallel_var.get()))
+        with open(sync_logic.CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+            self.config.write(configfile)
+        messagebox.showinfo("Сохранено", "Настройки успешно сохранены.", parent=self)
+        self.destroy()
 
 class AboutWindow(Toplevel):
     def __init__(self, master):
-        super().__init__(master); self.transient(master); self.title("О программе"); self.geometry("400x300"); self.resizable(False, False); self.grab_set()
-        main_frame = tk.Frame(self); main_frame.pack(pady=15, padx=20, fill="both", expand=True)
+        super().__init__(master)
+        self.transient(master)
+        self.title("О программе")
+        self.geometry("400x300")
+        self.resizable(False, False)
+        self.grab_set()
+
+        main_frame = tk.Frame(self)
+        main_frame.pack(pady=15, padx=20, fill="both", expand=True)
+
         try:
-            icon_path = Path(__file__).parent / "assets" / "icon.png"; original_image = Image.open(icon_path); resized_image = original_image.resize((64, 64), Image.Resampling.LANCZOS); self.icon_image = ImageTk.PhotoImage(resized_image)
-            icon_label = tk.Label(main_frame, image=self.icon_image); icon_label.grid(row=0, column=0, rowspan=6, padx=(0, 20), sticky="n")
-        except Exception as e: logging.warning(f"Не удалось загрузить иконку assets/icon.png: {e}")
-        tk.Label(main_frame, text="File Synchronizer", font=("Helvetica", 16, "bold")).grid(row=0, column=1, sticky="w"); tk.Label(main_frame, text="Версия 3.0").grid(row=1, column=1, sticky="w"); tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5, 15))
-        tk.Label(main_frame, text="Авторы:", font=("Helvetica", 10, "bold")).grid(row=3, column=1, sticky="w"); tk.Label(main_frame, text="LammerOnline, Google AI Studio").grid(row=4, column=1, sticky="w")
-        link_label = tk.Label(main_frame, text="Репозиторий на GitHub", fg="blue", cursor="hand2"); link_label.grid(row=5, column=1, sticky="w", pady=(10,0)); link_font = font.Font(link_label, link_label.cget("font")); link_font.configure(underline=True); link_label.configure(font=link_font); link_label.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/lammeronline/FS"))
-        close_button = tk.Button(self, text="Закрыть", command=self.destroy); close_button.pack(pady=(0, 15))
+            icon_path = Path(__file__).parent / "assets" / "icon.png"
+            original_image = Image.open(icon_path)
+            resized_image = original_image.resize((64, 64), Image.Resampling.LANCZOS)
+            self.icon_image = ImageTk.PhotoImage(resized_image)
+            icon_label = tk.Label(main_frame, image=self.icon_image)
+            icon_label.grid(row=0, column=0, rowspan=6, padx=(0, 20), sticky="n")
+        except Exception as e:
+            logging.warning(f"Не удалось загрузить иконку assets/icon.png: {e}")
+
+        tk.Label(main_frame, text="File Synchronizer", font=("Helvetica", 16, "bold")).grid(row=0, column=1, sticky="w")
+        tk.Label(main_frame, text="Версия 3.0").grid(row=1, column=1, sticky="w")
+        tk.Label(main_frame, text="Утилита для синхронизации файлов.").grid(row=2, column=1, sticky="w", pady=(5, 15))
+        tk.Label(main_frame, text="Авторы:", font=("Helvetica", 10, "bold")).grid(row=3, column=1, sticky="w")
+        tk.Label(main_frame, text="LammerOnline, Google AI Studio").grid(row=4, column=1, sticky="w")
+        
+        link_label = tk.Label(main_frame, text="Репозиторий на GitHub", fg="blue", cursor="hand2")
+        link_label.grid(row=5, column=1, sticky="w", pady=(10,0))
+        link_font = font.Font(link_label, link_label.cget("font"))
+        link_font.configure(underline=True)
+        link_label.configure(font=link_font)
+        link_label.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/lammeronline/FS"))
+
+        close_button = tk.Button(self, text="Закрыть", command=self.destroy)
+        close_button.pack(pady=(0, 15))
 
 class SyncApp:
     def __init__(self, master):
         self.master = master
-        master.title("File Synchronizer"); master.minsize(700, 600)
+        master.title("File Synchronizer")
+        master.minsize(700, 600)
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.active_widget = None
+        
         self._initialize_variables()
         self._create_widgets()
         self._setup_background_tasks()
 
     def _initialize_variables(self):
-        self.source_var, self.dest_var = tk.StringVar(), tk.StringVar(); self.no_overwrite_var, self.delete_removed_var = tk.BooleanVar(), tk.BooleanVar()
-        self.sync_empty_dirs_var = tk.BooleanVar(); self.exclude_patterns_var = tk.StringVar(); self.source_is_network_var, self.dest_is_network_var = tk.BooleanVar(), tk.BooleanVar()
-        self.source_user_var, self.source_pass_var = tk.StringVar(), tk.StringVar(); self.dest_user_var, self.dest_pass_var = tk.StringVar(), tk.StringVar()
-        self.source_show_pass_var, self.dest_show_pass_var = tk.BooleanVar(), tk.BooleanVar(); self.save_passwords_var = tk.BooleanVar()
-        self.use_staging_var = tk.BooleanVar(value=True); self.use_trash_var = tk.BooleanVar(value=True)
-        self.status_text_var = tk.StringVar(); self.stop_event = None
+        self.source_var = tk.StringVar()
+        self.dest_var = tk.StringVar()
+        self.no_overwrite_var = tk.BooleanVar()
+        self.delete_removed_var = tk.BooleanVar()
+        self.sync_empty_dirs_var = tk.BooleanVar()
+        self.exclude_patterns_var = tk.StringVar()
+        self.source_is_network_var = tk.BooleanVar()
+        self.dest_is_network_var = tk.BooleanVar()
+        self.source_user_var = tk.StringVar()
+        self.source_pass_var = tk.StringVar()
+        self.dest_user_var = tk.StringVar()
+        self.dest_pass_var = tk.StringVar()
+        self.source_show_pass_var = tk.BooleanVar()
+        self.dest_show_pass_var = tk.BooleanVar()
+        self.save_passwords_var = tk.BooleanVar()
+        self.use_staging_var = tk.BooleanVar(value=True)
+        self.use_trash_var = tk.BooleanVar(value=True)
+        self.status_text_var = tk.StringVar()
+        self.stop_event = None
 
     def _create_widgets(self):
-        self.main_frame = tk.Frame(self.master); self.main_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        self.main_frame = tk.Frame(self.master)
+        self.main_frame.pack(fill="both", expand=True, padx=10, pady=5)
         self.main_frame.columnconfigure(0, weight=1)
         self.main_frame.rowconfigure(5, weight=1)
         
-        path_frame = tk.LabelFrame(self.main_frame, text="Пути", padx=10, pady=10); path_frame.grid(row=0, column=0, sticky="ew", pady=(0,5)); path_frame.columnconfigure(1, weight=1)
-        tk.Label(path_frame, text="Источник:").grid(row=0, column=0, sticky="w", pady=(0,5)); self.source_entry = tk.Entry(path_frame, textvariable=self.source_var); self.source_entry.grid(row=0, column=1, sticky="ew", padx=5); tk.Button(path_frame, text="Обзор...", command=self.browse_source).grid(row=0, column=2, padx=(0,5)); tk.Checkbutton(path_frame, text="Сетевой путь", variable=self.source_is_network_var, command=self.toggle_source_creds).grid(row=0, column=3, sticky="w")
-        self.source_user_label = tk.Label(path_frame, text="  Пользователь:"); self.source_user_entry = tk.Entry(path_frame, textvariable=self.source_user_var); self.source_pass_label = tk.Label(path_frame, text="  Пароль:"); self.source_pass_entry = tk.Entry(path_frame, textvariable=self.source_pass_var, show="*"); self.source_show_pass_check = tk.Checkbutton(path_frame, text="Показать", variable=self.source_show_pass_var, command=self.toggle_source_pass_visibility)
+        path_frame = tk.LabelFrame(self.main_frame, text="Пути", padx=10, pady=10)
+        path_frame.grid(row=0, column=0, sticky="ew", pady=(0,5))
+        path_frame.columnconfigure(1, weight=1)
+        tk.Label(path_frame, text="Источник:").grid(row=0, column=0, sticky="w", pady=(0,5))
+        self.source_entry = tk.Entry(path_frame, textvariable=self.source_var)
+        self.source_entry.grid(row=0, column=1, sticky="ew", padx=5)
+        tk.Button(path_frame, text="Обзор...", command=self.browse_source).grid(row=0, column=2, padx=(0,5))
+        tk.Checkbutton(path_frame, text="Сетевой путь", variable=self.source_is_network_var, command=self.toggle_source_creds).grid(row=0, column=3, sticky="w")
+        self.source_user_label = tk.Label(path_frame, text="  Пользователь:")
+        self.source_user_entry = tk.Entry(path_frame, textvariable=self.source_user_var)
+        self.source_pass_label = tk.Label(path_frame, text="  Пароль:")
+        self.source_pass_entry = tk.Entry(path_frame, textvariable=self.source_pass_var, show="*")
+        self.source_show_pass_check = tk.Checkbutton(path_frame, text="Показать", variable=self.source_show_pass_var, command=self.toggle_source_pass_visibility)
         ttk.Separator(path_frame, orient='horizontal').grid(row=4, columnspan=4, sticky='ew', pady=10)
-        tk.Label(path_frame, text="Назначение:").grid(row=5, column=0, sticky="w", pady=(5,5)); self.dest_entry = tk.Entry(path_frame, textvariable=self.dest_var); self.dest_entry.grid(row=5, column=1, sticky="ew", padx=5); tk.Button(path_frame, text="Обзор...", command=self.browse_dest).grid(row=5, column=2, padx=(0,5)); tk.Checkbutton(path_frame, text="Сетевой путь", variable=self.dest_is_network_var, command=self.toggle_dest_creds).grid(row=5, column=3, sticky="w")
-        self.dest_user_label = tk.Label(path_frame, text="  Пользователь:"); self.dest_user_entry = tk.Entry(path_frame, textvariable=self.dest_user_var); self.dest_pass_label = tk.Label(path_frame, text="  Пароль:"); self.dest_pass_entry = tk.Entry(path_frame, textvariable=self.dest_pass_var, show="*"); self.dest_show_pass_check = tk.Checkbutton(path_frame, text="Показать", variable=self.dest_show_pass_var, command=self.toggle_dest_pass_visibility)
+        tk.Label(path_frame, text="Назначение:").grid(row=5, column=0, sticky="w", pady=(5,5))
+        self.dest_entry = tk.Entry(path_frame, textvariable=self.dest_var)
+        self.dest_entry.grid(row=5, column=1, sticky="ew", padx=5)
+        tk.Button(path_frame, text="Обзор...", command=self.browse_dest).grid(row=5, column=2, padx=(0,5))
+        tk.Checkbutton(path_frame, text="Сетевой путь", variable=self.dest_is_network_var, command=self.toggle_dest_creds).grid(row=5, column=3, sticky="w")
+        self.dest_user_label = tk.Label(path_frame, text="  Пользователь:")
+        self.dest_user_entry = tk.Entry(path_frame, textvariable=self.dest_user_var)
+        self.dest_pass_label = tk.Label(path_frame, text="  Пароль:")
+        self.dest_pass_entry = tk.Entry(path_frame, textvariable=self.dest_pass_var, show="*")
+        self.dest_show_pass_check = tk.Checkbutton(path_frame, text="Показать", variable=self.dest_show_pass_var, command=self.toggle_dest_pass_visibility)
         self.save_pass_check = tk.Checkbutton(path_frame, text="Запомнить пароли (хранятся в небезопасном виде)", variable=self.save_passwords_var)
         
-        options_frame = tk.LabelFrame(self.main_frame, text="Опции", padx=10, pady=10); options_frame.grid(row=1, column=0, sticky="ew", pady=5)
-        tk.Checkbutton(options_frame, text="Не перезаписывать измененные файлы", variable=self.no_overwrite_var).pack(anchor="w"); tk.Checkbutton(options_frame, text="Удалять лишние файлы в назначении", variable=self.delete_removed_var).pack(anchor="w"); tk.Checkbutton(options_frame, text="Синхронизировать пустые папки", variable=self.sync_empty_dirs_var).pack(anchor="w")
-        ttk.Separator(options_frame, orient='horizontal').pack(fill='x', pady=5); tk.Checkbutton(options_frame, text="Использовать безопасное удаление (в корзину)", variable=self.use_trash_var).pack(anchor="w"); tk.Checkbutton(options_frame, text="Использовать транзакционное копирование (надежнее)", variable=self.use_staging_var).pack(anchor="w")
+        options_frame = tk.LabelFrame(self.main_frame, text="Опции", padx=10, pady=10)
+        options_frame.grid(row=1, column=0, sticky="ew", pady=5)
+        tk.Checkbutton(options_frame, text="Не перезаписывать измененные файлы", variable=self.no_overwrite_var).pack(anchor="w")
+        tk.Checkbutton(options_frame, text="Удалять лишние файлы в назначении", variable=self.delete_removed_var).pack(anchor="w")
+        tk.Checkbutton(options_frame, text="Синхронизировать пустые папки", variable=self.sync_empty_dirs_var).pack(anchor="w")
+        ttk.Separator(options_frame, orient='horizontal').pack(fill='x', pady=5)
+        tk.Checkbutton(options_frame, text="Использовать безопасное удаление (в корзину)", variable=self.use_trash_var).pack(anchor="w")
+        tk.Checkbutton(options_frame, text="Использовать транзакционное копирование (надежнее)", variable=self.use_staging_var).pack(anchor="w")
         
-        exclude_frame = tk.LabelFrame(self.main_frame, text="Исключения", padx=10, pady=10); exclude_frame.grid(row=2, column=0, sticky="ew", pady=5)
-        tk.Label(exclude_frame, text="Исключить файлы (шаблоны через запятую):").pack(anchor="w"); self.exclude_entry = tk.Entry(exclude_frame, textvariable=self.exclude_patterns_var); self.exclude_entry.pack(fill="x")
+        exclude_frame = tk.LabelFrame(self.main_frame, text="Исключения", padx=10, pady=10)
+        exclude_frame.grid(row=2, column=0, sticky="ew", pady=5)
+        tk.Label(exclude_frame, text="Исключить файлы (шаблоны через запятую):").pack(anchor="w")
+        self.exclude_entry = tk.Entry(exclude_frame, textvariable=self.exclude_patterns_var)
+        self.exclude_entry.pack(fill="x")
         
-        self.sync_button = tk.Button(self.main_frame, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold")); self.sync_button.grid(row=3, column=0, pady=10)
+        self.sync_button = tk.Button(self.main_frame, text="Начать синхронизацию", command=self.start_sync_thread, bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"))
+        self.sync_button.grid(row=3, column=0, pady=10)
         
-        self.progress_frame = tk.LabelFrame(self.main_frame, text="Прогресс", padx=10, pady=10); self.progress_frame.grid(row=4, column=0, sticky="ew", pady=(5,0))
-        self.status_label = tk.Label(self.progress_frame, textvariable=self.status_text_var, anchor="w"); self.overall_progress = ttk.Progressbar(self.progress_frame, orient="horizontal", mode="determinate"); self.status_label.pack(fill="x"); self.overall_progress.pack(fill="x", pady=(5, 0))
+        self.progress_frame = tk.LabelFrame(self.main_frame, text="Прогресс", padx=10, pady=10)
+        self.progress_frame.grid(row=4, column=0, sticky="ew", pady=(5,0))
+        self.status_label = tk.Label(self.progress_frame, textvariable=self.status_text_var, anchor="w")
+        self.overall_progress = ttk.Progressbar(self.progress_frame, orient="horizontal", mode="determinate")
+        self.status_label.pack(fill="x")
+        self.overall_progress.pack(fill="x", pady=(5, 0))
 
-        self.log_frame = tk.LabelFrame(self.main_frame, text="Лог выполнения", padx=10, pady=10); self.log_frame.grid(row=5, column=0, sticky="nsew")
-        self.log_frame.rowconfigure(0, weight=1); self.log_frame.columnconfigure(0, weight=1)
-        self.log_area = scrolledtext.ScrolledText(self.log_frame, state='disabled', wrap=tk.WORD, bg="#2b2b2b", fg="#a9b7c6"); self.log_area.grid(row=0, column=0, sticky="nsew")
+        self.log_frame = tk.LabelFrame(self.main_frame, text="Лог выполнения", padx=10, pady=10)
+        self.log_frame.grid(row=5, column=0, sticky="nsew")
+        self.log_frame.rowconfigure(0, weight=1)
+        self.log_frame.columnconfigure(0, weight=1)
+        self.log_area = scrolledtext.ScrolledText(self.log_frame, state='disabled', wrap=tk.WORD, bg="#2b2b2b", fg="#a9b7c6")
+        self.log_area.grid(row=0, column=0, sticky="nsew")
 
     def _setup_background_tasks(self):
         self.create_menu()
@@ -110,9 +226,16 @@ class SyncApp:
 
     def create_menu(self):
         menubar = tk.Menu(self.master); self.master.config(menu=menubar)
-        file_menu = tk.Menu(menubar, tearoff=0); file_menu.add_command(label="Импорт задачи...", command=self.import_job_file); file_menu.add_command(label="Экспорт задачи...", command=self.export_job_file); file_menu.add_separator(); file_menu.add_command(label="Настройки", command=self.open_settings); file_menu.add_separator(); file_menu.add_command(label="Выход", command=self.on_closing)
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Импорт задачи...", command=self.import_job_file)
+        file_menu.add_command(label="Экспорт задачи...", command=self.export_job_file)
+        file_menu.add_separator()
+        file_menu.add_command(label="Настройки", command=self.open_settings)
+        file_menu.add_separator()
+        file_menu.add_command(label="Выход", command=self.on_closing)
         menubar.add_cascade(label="Файл", menu=file_menu)
-        help_menu = tk.Menu(menubar, tearoff=0); help_menu.add_command(label="О программе", command=self.show_about)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="О программе", command=self.show_about)
         menubar.add_cascade(label="Справка", menu=help_menu)
     
     def create_context_menu(self):
