@@ -57,7 +57,7 @@ def ensure_path_is_ready(path_str, net_creds=None):
     try:
         if sys.platform == "win32":
             command = ['net', 'use', path_str, password, f'/user:{user}', '/persistent:no']
-            subprocess.run(command, capture_output=True, text=True, check=True, encoding='cp866', creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(command, capture_output=True, text=True, check=True, encoding='cp866', creationflags=0x08000000) # CREATE_NO_WINDOW
             logging.info(f"Команда 'net use' выполнена успешно для '{path_str}'."); return True
         else: logging.warning(f"Автоматическое подключение не реализовано для {sys.platform}."); return False
     except (subprocess.CalledProcessError, FileNotFoundError) as e: logging.error(f"Не удалось подключить сетевой диск '{path_str}': {e}"); return False
@@ -170,9 +170,12 @@ def sync_folders(source_dir, dest_dir, no_overwrite, delete_removed, sync_empty_
                 try: (dest_path / rel_path).unlink(); stats["deleted"] += 1
                 except Exception as e: logging.error(f"Ошибка удаления файла {rel_path}: {e}"); stats["errors"] += 1
         for dirpath, _, _ in os.walk(dest_path, topdown=False):
-            if not os.listdir(dirpath) and not (source_path / Path(dirpath).relative_to(dest_path)).exists():
-                try: logging.info(f"Удаление пустой директории: {dirpath}"); os.rmdir(dirpath)
-                except OSError as e: logging.error(f"Ошибка удаления пустой директории {dirpath}: {e}")
+            relative_dir = Path(dirpath).relative_to(dest_path)
+            source_equivalent = source_path / relative_dir
+            if not source_equivalent.exists() and not os.listdir(dirpath):
+                if str(relative_dir) != '.':
+                    try: logging.info(f"Удаление пустой директории: {dirpath}"); os.rmdir(dirpath)
+                    except OSError as e: logging.error(f"Ошибка удаления пустой директории {dirpath}: {e}")
     return stats
 
 def run_sync_session(source, destination, no_overwrite, delete_removed, sync_empty_dirs=False, exclude_patterns=None, source_creds=None, dest_creds=None, stop_event=None, comparison_mode='accurate', use_parallel=False, use_staging=False, use_trash=False, progress_callback=None):
